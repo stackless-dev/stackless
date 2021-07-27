@@ -777,7 +777,8 @@ def interpreter_shutdown_test():
 
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and sys.argv[1] == "IST":
-        interpreter_shutdown_test()
+        pass
+        # interpreter_shutdown_test()
     else:
         if not sys.argv[1:]:
             sys.argv.append('-v')
