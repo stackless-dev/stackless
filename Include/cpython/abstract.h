@@ -2,6 +2,8 @@
 #  error "this header file must not be included directly"
 #endif
 
+#include "stackless_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -125,6 +127,7 @@ _PyObject_Vectorcall(PyObject *callable, PyObject *const *args,
         Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
         return _PyObject_MakeTpCall(callable, args, nargs, kwnames);
     }
+    STACKLESS_GETARG();
     PyObject *res = func(callable, args, nargsf, kwnames);
     return _Py_CheckFunctionResult(callable, res, NULL);
 }

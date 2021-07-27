@@ -67,6 +67,7 @@ method_vectorcall(PyObject *method, PyObject *const *args,
         Py_ssize_t totalargs = nargs + nkwargs;
         newargs = PyMem_Malloc((totalargs+1) * sizeof(PyObject *));
         if (newargs == NULL) {
+            STACKLESS_GETARG();
             PyErr_NoMemory();
             return NULL;
         }

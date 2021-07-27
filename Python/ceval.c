@@ -5355,6 +5355,7 @@ trace_call_function(PyThreadState *tstate,
         return x;
     }
     else if (Py_TYPE(func) == &PyMethodDescr_Type && nargs > 0) {
+        STACKLESS_GETARG();
         /* We need to create a temporary bound method as argument
            for profiling.
 
@@ -5367,9 +5368,11 @@ trace_call_function(PyThreadState *tstate,
         if (func == NULL) {
             return NULL;
         }
+        STACKLESS_PROMOTE_ALL();
         C_TRACE(x, _PyCFunction_FastCallKeywords(func,
                                                  args+1, nargs-1,
                                                  kwnames));
+        STACKLESS_ASSERT();
         Py_DECREF(func);
         return x;
     }
@@ -5388,12 +5391,14 @@ call_function(PyThreadState *tstate, PyObject ***pp_stack, Py_ssize_t oparg, PyO
     Py_ssize_t nargs = oparg - nkwargs;
     PyObject **stack = (*pp_stack) - nargs - nkwargs;
 
+    STACKLESS_PROPOSE_ALL(tstate);
     if (tstate->use_tracing) {
         x = trace_call_function(tstate, func, stack, nargs, kwnames);
     }
     else {
         x = _PyObject_Vectorcall(func, stack, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
     }
+    STACKLESS_ASSERT();
 
     assert((STACKLESS_RETVAL(tstate, x) != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
 
