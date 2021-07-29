@@ -111,7 +111,7 @@ _PyObject_FastCallDict(PyObject *callable, PyObject *const *args,
     STACKLESS_GETARG();
     PyObject *res;
     if (kwargs == NULL) {
-        res = func(callable, args, nargsf, NULL);
+        res = STACKLESS_VECTORCALL(func, callable, args, nargsf, NULL);
     }
     else {
         PyObject *kwnames;
@@ -119,7 +119,7 @@ _PyObject_FastCallDict(PyObject *callable, PyObject *const *args,
         if (_PyStack_UnpackDict(args, nargs, kwargs, &newargs, &kwnames) < 0) {
             return NULL;
         }
-        res = func(callable, newargs, nargs, kwnames);
+        res = STACKLESS_VECTORCALL(func, callable, newargs, nargs, kwnames);
         if (kwnames != NULL) {
             Py_ssize_t i, n = PyTuple_GET_SIZE(kwnames) + nargs;
             for (i = 0; i < n; i++) {
@@ -214,7 +214,7 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
         kwargs, &args, &kwnames) < 0) {
         return NULL;
     }
-    PyObject *result = func(callable, args, nargs, kwnames);
+    PyObject *result = STACKLESS_VECTORCALL(func, callable, args, nargs, kwnames);
     if (kwnames != NULL) {
         Py_ssize_t i, n = PyTuple_GET_SIZE(kwnames) + nargs;
         for (i = 0; i < n; i++) {
@@ -447,6 +447,8 @@ PyObject *
 _PyFunction_FastCallKeywords(PyObject *func, PyObject* const* stack,
                              size_t nargsf, PyObject *kwnames)
 {
+    STACKLESS_VECTORCALL_GETARG(_PyFunction_FastCallKeywords);
+    PyObject *result;
     PyCodeObject *co = (PyCodeObject *)PyFunction_GET_CODE(func);
     PyObject *globals = PyFunction_GET_GLOBALS(func);
     PyObject *argdefs = PyFunction_GET_DEFAULTS(func);
@@ -467,15 +469,21 @@ _PyFunction_FastCallKeywords(PyObject *func, PyObject* const* stack,
         (co->co_flags & ~PyCF_MASK) == (CO_OPTIMIZED | CO_NEWLOCALS | CO_NOFREE))
     {
         if (argdefs == NULL && co->co_argcount + co->co_posonlyargcount== nargs) {
-            return function_code_fastcall(co, stack, nargs, globals);
+            STACKLESS_PROMOTE_ALL();
+            result = function_code_fastcall(co, stack, nargs, globals);
+            STACKLESS_ASSERT();
+            return result;
         }
         else if (nargs == 0 && argdefs != NULL
                  && co->co_argcount + co->co_posonlyargcount == PyTuple_GET_SIZE(argdefs)) {
             /* function called with no arguments, but all parameters have
                a default value: use default values as arguments .*/
             stack = _PyTuple_ITEMS(argdefs);
-            return function_code_fastcall(co, stack, PyTuple_GET_SIZE(argdefs),
+            STACKLESS_PROMOTE_ALL();
+            result = function_code_fastcall(co, stack, PyTuple_GET_SIZE(argdefs),
                                           globals);
+            STACKLESS_ASSERT();
+            return result;
         }
     }
 
@@ -492,13 +500,16 @@ _PyFunction_FastCallKeywords(PyObject *func, PyObject* const* stack,
         d = NULL;
         nd = 0;
     }
-    return _PyEval_EvalCodeWithName((PyObject*)co, globals, (PyObject *)NULL,
+    STACKLESS_PROMOTE_ALL();
+    result = _PyEval_EvalCodeWithName((PyObject*)co, globals, (PyObject *)NULL,
                                     stack, nargs,
                                     nkwargs ? _PyTuple_ITEMS(kwnames) : NULL,
                                     stack + nargs,
                                     nkwargs, 1,
                                     d, (int)nd, kwdefs,
                                     closure, name, qualname);
+    STACKLESS_ASSERT();
+    return result;
 }
 
 
@@ -815,15 +826,18 @@ _PyCFunction_FastCallKeywords(PyObject *func,
                               PyObject *const *args, size_t nargsf,
                               PyObject *kwnames)
 {
+    STACKLESS_VECTORCALL_GETARG(_PyCFunction_FastCallKeywords);
     PyObject *result;
 
     assert(func != NULL);
     assert(PyCFunction_Check(func));
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
 
+    STACKLESS_PROMOTE_ALL();
     result = _PyMethodDef_RawFastCallKeywords(((PyCFunctionObject*)func)->m_ml,
                                               PyCFunction_GET_SELF(func),
                                               args, nargs, kwnames);
+    STACKLESS_ASSERT();
     result = _Py_CheckFunctionResult(func, result, NULL);
     return result;
 }

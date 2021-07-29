@@ -46,6 +46,7 @@ static PyObject *
 method_vectorcall(PyObject *method, PyObject *const *args,
                   size_t nargsf, PyObject *kwnames)
 {
+    STACKLESS_VECTORCALL_GETARG(method_vectorcall);
     assert(Py_TYPE(method) == &PyMethod_Type);
     PyObject *self, *func, *result;
     self = PyMethod_GET_SELF(method);
@@ -58,7 +59,9 @@ method_vectorcall(PyObject *method, PyObject *const *args,
         nargs += 1;
         PyObject *tmp = newargs[0];
         newargs[0] = self;
+        STACKLESS_PROMOTE_ALL();
         result = _PyObject_Vectorcall(func, newargs, nargs, kwnames);
+        STACKLESS_ASSERT();
         newargs[0] = tmp;
     }
     else {
@@ -67,14 +70,15 @@ method_vectorcall(PyObject *method, PyObject *const *args,
         Py_ssize_t totalargs = nargs + nkwargs;
         newargs = PyMem_Malloc((totalargs+1) * sizeof(PyObject *));
         if (newargs == NULL) {
-            STACKLESS_GETARG();
             PyErr_NoMemory();
             return NULL;
         }
         /* use borrowed references */
         newargs[0] = self;
         memcpy(newargs + 1, args, totalargs * sizeof(PyObject *));
+        STACKLESS_PROMOTE_ALL();
         result = _PyObject_Vectorcall(func, newargs, nargs+1, kwnames);
+        STACKLESS_ASSERT();
         PyMem_Free(newargs);
     }
     return result;

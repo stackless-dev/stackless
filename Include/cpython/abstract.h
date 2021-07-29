@@ -128,7 +128,9 @@ _PyObject_Vectorcall(PyObject *callable, PyObject *const *args,
         return _PyObject_MakeTpCall(callable, args, nargs, kwnames);
     }
     STACKLESS_GETARG();
+    STACKLESS_VECTORCALL_BEFORE(func);
     PyObject *res = func(callable, args, nargsf, kwnames);
+    STACKLESS_VECTORCALL_AFTER(func);
     return _Py_CheckFunctionResult(callable, res, NULL);
 }
 

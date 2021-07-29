@@ -317,7 +317,7 @@ PyAPI_DATA(PyTypeObject) PyChannel_Type;
  ******************************************************/
 
 #ifndef _PyStackless_TRY_STACKLESS
-PyAPI_DATA(int * const) _PyStackless__TryStacklessPtr;
+PyAPI_DATA(intptr_t * const) _PyStackless__TryStacklessPtr;
 #define _PyStackless_TRY_STACKLESS (*_PyStackless__TryStacklessPtr)
 #endif
 #ifndef STACKLESS__GETARG_ASSERT

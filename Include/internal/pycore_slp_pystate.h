@@ -70,16 +70,28 @@ typedef struct {
  */
 struct _stackless_runtime_state {
     /*
-     * flag whether the next call should try to be stackless.
-     * The protocol is: This flag may be only set if the called
+     * try_stackless: flag whether the next call should try to be stackless.
+     *
+     * Possible values:
+     *   0: don't be stackless
+     *   1: any called C-function shall try to be stackless.
+     *   other: only the C-function with address try_stackless shall try to
+     *          by stackless.
+     *
+     * The protocol is: This flag may be only set to 1 if the called
      * thing supports it. It doesn't matter whether it uses the
      * chance, but it *must* set it to zero before returning.
+     *
+     * This flag may be set to the address of a directly called C-function.
+     * It is not required, that the called function supports stackless
+     * calls.
+     *
      * This flags in a way serves as a parameter that we don't have.
      *
      * As long as the GIL is shared between sub-interpreters,
      * try_stackless can be a field in the runtime state.
      */
-    int try_stackless;
+    intptr_t try_stackless;
 
     /* Used to manage free C-stack objects, see stacklesseval.c */
     int cstack_cachecount;

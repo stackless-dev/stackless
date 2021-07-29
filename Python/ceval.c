@@ -5351,7 +5351,10 @@ trace_call_function(PyThreadState *tstate,
 {
     PyObject *x;
     if (PyCFunction_Check(func)) {
+        STACKLESS_GETARG();
+        STACKLESS_VECTORCALL_BEFORE(_PyCFunction_FastCallKeywords);
         C_TRACE(x, _PyCFunction_FastCallKeywords(func, args, nargs, kwnames));
+        STACKLESS_VECTORCALL_AFTER(_PyCFunction_FastCallKeywords);
         return x;
     }
     else if (Py_TYPE(func) == &PyMethodDescr_Type && nargs > 0) {
@@ -5368,11 +5371,11 @@ trace_call_function(PyThreadState *tstate,
         if (func == NULL) {
             return NULL;
         }
-        STACKLESS_PROMOTE_ALL();
+        STACKLESS_VECTORCALL_BEFORE(_PyCFunction_FastCallKeywords);
         C_TRACE(x, _PyCFunction_FastCallKeywords(func,
                                                  args+1, nargs-1,
                                                  kwnames));
-        STACKLESS_ASSERT();
+        STACKLESS_VECTORCALL_AFTER(_PyCFunction_FastCallKeywords);
         Py_DECREF(func);
         return x;
     }

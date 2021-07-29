@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "stackless_api.h"
 #include "pycore_atomic.h"
 
 
@@ -143,6 +144,14 @@ static void recreate_gil(struct _gil_runtime_state *gil)
 static void
 drop_gil(struct _ceval_runtime_state *ceval, PyThreadState *tstate)
 {
+    /*
+     * The flag _PyStackless_TRY_STACKLESS is shared between threads
+     * and interpreters. If a function, that does not support the
+     * Stackless-protocol is invoked using the PEP-590 vectorcall
+     * protocol, the value of _PyStackless_TRY_STACKLESS could leak
+     * to other threads. To prevent this, it is reset here.
+     */
+    STACKLESS_RETRACT();
     struct _gil_runtime_state *gil = &ceval->gil;
     if (!_Py_atomic_load_relaxed(&gil->locked)) {
         Py_FatalError("drop_gil: GIL is not locked");

@@ -272,7 +272,7 @@ _PyMethodDescr_FastCallKeywords(PyObject *descrobj,
                                 PyObject *const *args, size_t nargsf,
                                 PyObject *kwnames)
 {
-    STACKLESS_GETARG();
+    STACKLESS_VECTORCALL_GETARG(_PyMethodDescr_FastCallKeywords);
     assert(Py_TYPE(descrobj) == &PyMethodDescr_Type);
     PyMethodDescrObject *descr = (PyMethodDescrObject *)descrobj;
     PyObject *self, *result;
