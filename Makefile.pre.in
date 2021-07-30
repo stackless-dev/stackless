@@ -710,7 +710,7 @@ Programs/_testembed: Programs/_testembed.o $(LIBRARY) $(LDLIBRARY) $(PY3LIBRARY)
 	$(LINKCC) $(PY_CORE_LDFLAGS) $(LINKFORSHARED) -o $@ Programs/_testembed.o $(BLDLIBRARY) $(LIBS) $(MODLIBS) $(SYSLIBS)
 
 
-$(srcdir)/Include/cpython/slp_exttype.h: $(srcdir)/Objects/typeobject.c
+$(srcdir)/Include/cpython/slp_exttype.h: $(srcdir)/Objects/typeobject.c $(srcdir)/Stackless/Tools/extract_slp_info.py
 	$(PYTHON_FOR_REGEN) $(srcdir)/Stackless/Tools/extract_slp_info.py && \
 	mv $(srcdir)/Include/cpython/slp_exttype.h.new $(srcdir)/Include/cpython/slp_exttype.h
 
