@@ -276,44 +276,19 @@ t.run()  # let the bomb explode");
 
 PyTypeObject PyBomb_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "_stackless.bomb",
-    sizeof(PyBombObject),
-    0,
-    (destructor)bomb_dealloc,                   /* tp_dealloc */
-    0,                                          /* tp_print */
-    0,                                          /* tp_getattr */
-    0,                                          /* tp_setattr */
-    0,                                          /* tp_compare */
-    0,                                          /* tp_repr */
-    0,                                          /* tp_as_number */
-    0,                                          /* tp_as_sequence */
-    0,                                          /* tp_as_mapping */
-    0,                                          /* tp_hash */
-    0,                                          /* tp_call */
-    0,                                          /* tp_str */
-    PyObject_GenericGetAttr,                    /* tp_getattro */
-    PyObject_GenericSetAttr,                    /* tp_setattro */
-    0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags */
-    bomb__doc__,                                /* tp_doc */
-    (traverseproc)bomb_traverse,                /* tp_traverse */
-    (inquiry) bomb_clear,                       /* tp_clear */
-    0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
-    0,                                          /* tp_iter */
-    0,                                          /* tp_iternext */
-    bomb_methods,                               /* tp_methods */
-    bomb_members,                               /* tp_members */
-    0,                                          /* tp_getset */
-    0,                                          /* tp_base */
-    0,                                          /* tp_dict */
-    0,                                          /* tp_descr_get */
-    0,                                          /* tp_descr_set */
-    0,                                          /* tp_dictoffset */
-    0,                                          /* tp_init */
-    0,                                          /* tp_alloc */
-    bomb_new,                                   /* tp_new */
-    PyObject_GC_Del,                            /* tp_free */
+    .tp_name = "_stackless.bomb",
+    .tp_basicsize = sizeof(PyBombObject),
+    .tp_dealloc = (destructor)bomb_dealloc,
+    .tp_getattro = PyObject_GenericGetAttr,
+    .tp_setattro = PyObject_GenericSetAttr,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_doc = bomb__doc__,
+    .tp_traverse = (traverseproc)bomb_traverse,
+    .tp_clear = (inquiry) bomb_clear,
+    .tp_methods = bomb_methods,
+    .tp_members = bomb_members,
+    .tp_new = bomb_new,
+    .tp_free = PyObject_GC_Del,
 };
 
 int
