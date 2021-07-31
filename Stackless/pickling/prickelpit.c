@@ -304,6 +304,9 @@ static int init_type(PyTypeObject *t, int (*initchain)(PyObject *), PyObject * m
     t->tp_base->tp_name = name;
     t->tp_basicsize = t->tp_base->tp_basicsize;
     t->tp_itemsize  = t->tp_base->tp_itemsize;
+    t->tp_descr_get = t->tp_base->tp_descr_get;
+    t->tp_vectorcall_offset = t->tp_base->tp_vectorcall_offset;
+    t->tp_call = t->tp_base->tp_call;
     t->tp_flags     = t->tp_base->tp_flags & ~Py_TPFLAGS_READY;
     if (PyObject_SetAttrString(mod, name, (PyObject *) t))
         return -1;
