@@ -400,63 +400,32 @@ PyAPI_FUNC(int) PyStackless_InitFunctionDeclaration(
 Macros for the "stackless protocol"
 ===================================
 
-How does a C-function in Stackless-Python decide whether it may return
-Py_UnwindToken? (After all, this is only allowed if the caller can handle
-Py_UnwindToken). The obvious thing would be to use your own function argument,
-but that would change the function prototypes and thus Python’s C-API. This
-is not practical. Instead, the global variable “_PyStackless_TRY_STACKLESS”
-is used as an implicit parameter.
+How to does Stackless Python decide, if a function may return an unwind-token.
 
-The content of this variable is moved to the local variable “stackless” at the
-beginning of a C function. In the process, “_PyStackless_TRY_STACKLESS” is set
-to 0, indicating that no unwind-token may be returned. This is done with the
-macro STACKLESS_GETARG() or, for vectorcall functions (see PEP 590), with the
-macro STACKLESS_VECTORCALL_GETARG(), which should be added at the beginning of
-the function declaration.
+There is one global variable _PyStackless_TRY_STACKLESS which is used
+like an implicit parameter. Since we don't have a real parameter,
+the flag is copied into the local variable "stackless" and cleared.
+This is done by the STACKLESS_GETARG() macro, which should be added to
+the top of the function's declarations.
+The idea is to keep the chances to introduce error to the minimum.
+A function can safely do some tests and return before calling
+anything, since the flag is in a local variable.
+Depending on context, this flag is propagated to other called
+functions. They *must* obey the protocol. To make this sure,
+the STACKLESS_ASSERT() macro has to be called after every such call.
 
-This design minimizes the possibility of introducing errors due to improper
-return of Py_UnwindToken. The function can contain arbitrary code because the
-flag is hidden in a local variable. If the function is to support soft-
-switching, it must be further adapted. The flag may only be passed to other
-called functions if they adhere to the Stackless-protocol. The macros
-STACKLESS_PROMOTExxx() serve this purpose. To ensure compliance with the
-protocol, the macro STACKLESS_ASSERT() must be called after each such call.
-An exception is the call of vectorcall functions. The call of a vectorcall
-function must be framed with the macros STACKLESS_VECTORCALL_BEFORE() and
-STACKLESS_VECTORCALL_AFTER() or - more simply - performed with the macro
-STACKLESS_VECTORCALL().
-
-Many internal functions have been patched to support this protocol. Their first
-action is a direct or indirect call of the macro STACKLESS_GETARG() or
-STACKLESS_VECTORCALL_GETARG().
-
+Many internal functions have been patched to support this protocol.
 
 STACKLESS_GETARG()
 
-  Define and initialize the local variable int stackless. The value of
-  stackless is non-zero, if the function may return Py_UnwindToken. After a
-  call to STACKLESS_GETARG() the value of the global variable
-  “_PyStackless_TRY_STACKLESS” is 0.
-
-STACKLESS_VECTORCALL_GETARG(func)
-
-  Vectorcall variant of the macro STACKLESS_GETARG(). Functions of type
-  vectorcallfunc must use STACKLESS_VECTORCALL_GETARG() instead of
-  STACKLESS_GETARG(). The argument "func" must be set to the vectorcall
-  function itself. See function _PyCFunction_FastCallKeywords() for an example.
+  Move the _PyStackless_TRY_STACKLESS flag into the local variable "stackless".
 
 STACKLESS_PROMOTE_ALL()
 
-  All STACKLESS_PROMOTExxx() macros are used to propagate the stackless-flag
-  from the local variable “stackless” to the global variable
-  “_PyStackless_TRY_STACKLESS”. These macros can’t be used to call a vectorcall
-  function.
-
-  The macro STACKLESS_PROMOTE_ALL() does this unconditionally. It is used for
-  cases where we know that the called function will take care of our object,
-  and we need no test. For example, PyObject_Call() and all other
-  Py{Object,Function,CFunction}_*Call* functions use STACKLESS_PROMOTE_xxx
-  itself, so we don’t need to check further.
+  is used for cases where we know that the called function will take
+  care of our object, and we need no test. For example, PyObject_Call
+  and all other Py{Object,Function,CFunction}_*Call* functions use
+  STACKLESS_PROMOTE_xxx, itself, so we don't need to check further.
 
 STACKLESS_PROMOTE(func)
 
@@ -488,22 +457,6 @@ STACKLESS_ASSERT()
 STACKLESS_RETRACT()
 
   Reset _PyStackless_TRY_STACKLESS. Rarely needed.
-
-STACKLESS_VECTORCALL_BEFORE(func)
-STACKLESS_VECTORCALL_AFTER(func)
-
-  If a C-function needs to propagate the stackless-flag from the local variable
-  “stackless” to the global variable “_PyStackless_TRY_STACKLESS” in order to
-  call a vectorcall function, it must frame the call with these macros. Set the
-  argument "func" to the called function. The called function is not required
-  to support the Stackless-protocol.
-
-STACKLESS_VECTORCALL(func, callable, args, nargsf, kwnames)
-
-  Call the vectorcall function func with the given arguments and return the
-  result. It is a convenient alternative to the macros
-  STACKLESS_VECTORCALL_BEFORE() and STACKLESS_VECTORCALL_AFTER(). The called
-  function func is not required to support the Stackless-protocol.
 
 */
 
