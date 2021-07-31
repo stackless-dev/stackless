@@ -531,7 +531,7 @@ Their first action is a direct or indirect call of the macro
   Vectorcall variant of the macro :c:func:`STACKLESS_GETARG`. Functions of type
   :c:type:`vectorcallfunc` must use :c:func:`STACKLESS_VECTORCALL_GETARG` instead
   of :c:func:`STACKLESS_GETARG`. The argument *func* must be set to the vectorcall
-  function itself. See function :c:func:`_PyCFunction_FastCallKeywords` for an example.
+  function itself. See function :c:func:`_PyCFunction_Vectorcall` for an example.
 
 .. c:function:: STACKLESS_PROMOTE_ALL()
 
