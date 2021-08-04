@@ -539,11 +539,12 @@ Their first action is a direct or indirect call of the macro
   from the local variable "stackless" to the global variable
   "_PyStackless_TRY_STACKLESS". These macros can't be used to call a vectorcall [#f2]_ function.
 
-  The macro :c:func:`STACKLESS_PROMOTE_ALL` does
-  this unconditionally. It is used for cases where we know that the called
-  function will take care of our object, and we need no test. For example,
-  :c:func:`PyObject_Call` and all other Py{Object,Function,CFunction}_*Call*
-  functions use STACKLESS_PROMOTE_xxx itself, so we don't need to check further.
+  The macro :c:func:`STACKLESS_PROMOTE_ALL` does this unconditionally.
+  It is used for cases where we know that the called function obeys
+  the stackless-protocol by calling STACKLESS_GETARG() and possibly
+  returning the unwind token. For example, PyObject_Call() and all other
+  Py{Object,Function,CFunction}_*Call* functions use STACKLESS_GETARG() and
+  STACKLESS_PROMOTE_xxx itself, so we don’t need to check further.
 
 .. c:function:: STACKLESS_PROMOTE_FLAG(flag)
 
