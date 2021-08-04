@@ -547,8 +547,8 @@ STACKLESS_VECTORCALL(func, callable, args, nargsf, kwnames)
 #define STACKLESS_RETRACT() assert(1)
 #define STACKLESS_ASSERT() assert(1)
 #define STACKLESS_VECTORCALL_GETARG(func) int stackless = 0
-#define STACKLESS_VECTORCALL_BEFORE(func) (stackless = 0)
-#define STACKLESS_VECTORCALL_AFTER(func) (stackless = 0)
+#define STACKLESS_VECTORCALL_BEFORE(func) assert(1)
+#define STACKLESS_VECTORCALL_AFTER(func) assert(1)
 #endif
 
 #define STACKLESS_PROMOTE_METHOD(obj, slot_name) \

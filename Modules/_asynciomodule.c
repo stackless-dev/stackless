@@ -1432,8 +1432,7 @@ static PyTypeObject FutureType = {
     .tp_dealloc = FutureObj_dealloc,
     .tp_as_async = &FutureType_as_async,
     .tp_repr = (reprfunc)FutureObj_repr,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE
-        | Py_TPFLAGS_HAVE_FINALIZE,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .tp_doc = _asyncio_Future___init____doc__,
     .tp_traverse = (traverseproc)FutureObj_traverse,
     .tp_clear = (inquiry)FutureObj_clear,
@@ -2344,6 +2343,18 @@ _asyncio_Task_set_exception(TaskObj *self, PyObject *exception)
 }
 
 /*[clinic input]
+_asyncio.Task.get_coro
+[clinic start generated code]*/
+
+static PyObject *
+_asyncio_Task_get_coro_impl(TaskObj *self)
+/*[clinic end generated code: output=bcac27c8cc6c8073 input=d2e8606c42a7b403]*/
+{
+    Py_INCREF(self->task_coro);
+    return self->task_coro;
+}
+
+/*[clinic input]
 _asyncio.Task.get_name
 [clinic start generated code]*/
 
@@ -2469,6 +2480,7 @@ static PyMethodDef TaskType_methods[] = {
     _ASYNCIO_TASK__REPR_INFO_METHODDEF
     _ASYNCIO_TASK_GET_NAME_METHODDEF
     _ASYNCIO_TASK_SET_NAME_METHODDEF
+    _ASYNCIO_TASK_GET_CORO_METHODDEF
     {NULL, NULL}        /* Sentinel */
 };
 
@@ -2490,8 +2502,7 @@ static PyTypeObject TaskType = {
     .tp_dealloc = TaskObj_dealloc,
     .tp_as_async = &FutureType_as_async,
     .tp_repr = (reprfunc)FutureObj_repr,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE
-        | Py_TPFLAGS_HAVE_FINALIZE,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .tp_doc = _asyncio_Task___init____doc__,
     .tp_traverse = (traverseproc)TaskObj_traverse,
     .tp_clear = (inquiry)TaskObj_clear,

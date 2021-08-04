@@ -27,11 +27,11 @@
 #endif
 
 typedef struct {
-    struct _cstack * cstack_chain;              /* the chain of all C-stacks of this interpreter. This is an uncounted/borrowed ref. */
+    struct _slp_cstack * cstack_chain;          /* the chain of all C-stacks of this interpreter. This is an uncounted/borrowed ref. */
     PyObject * reduce_frame_func;               /* a function used to pickle frames */
     PyObject * error_handler;                   /* the Stackless error handler */
     PyObject * channel_hook;                    /* the channel callback function */
-    struct _bomb * mem_bomb;                    /* a permanent bomb to use for memory errors */
+    struct _slp_bomb * mem_bomb;                /* a permanent bomb to use for memory errors */
     PyObject * schedule_hook;                   /* the schedule callback function */
     slp_schedule_hook_func * schedule_fasthook; /* the fast C-only schedule_hook */
     struct _ts * initial_tstate;                /* recording the main thread state */
@@ -95,15 +95,15 @@ struct _stackless_runtime_state {
 
     /* Used to manage free C-stack objects, see stacklesseval.c */
     int cstack_cachecount;
-    struct _cstack *cstack_cache[SLP_CSTACK_SLOTS];
+    struct _slp_cstack *cstack_cache[SLP_CSTACK_SLOTS];
 
     /*
      * Used during a hard switch.
      */
     struct {
-        struct _cstack **cstprev;
-        struct _cstack *cst;
-        struct _tasklet *prev;
+        struct _slp_cstack **cstprev;
+        struct _slp_cstack *cst;
+        struct _slp_tasklet *prev;
     } transfer;
 };
 

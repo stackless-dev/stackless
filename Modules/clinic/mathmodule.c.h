@@ -637,4 +637,80 @@ skip_optional_kwonly:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=aeed62f403b90199 input=a9049054013a1b77]*/
+
+PyDoc_STRVAR(math_perm__doc__,
+"perm($module, n, k, /)\n"
+"--\n"
+"\n"
+"Number of ways to choose k items from n items without repetition and with order.\n"
+"\n"
+"Evaluates to n! / (n - k)! when k <= n and evaluates\n"
+"to zero when k > n.\n"
+"\n"
+"Raises TypeError if either of the arguments are not integers.\n"
+"Raises ValueError if either of the arguments are negative.");
+
+#define MATH_PERM_METHODDEF    \
+    {"perm", (PyCFunction)(void(*)(void))math_perm, METH_FASTCALL, math_perm__doc__},
+
+static PyObject *
+math_perm_impl(PyObject *module, PyObject *n, PyObject *k);
+
+static PyObject *
+math_perm(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    PyObject *return_value = NULL;
+    PyObject *n;
+    PyObject *k;
+
+    if (!_PyArg_CheckPositional("perm", nargs, 2, 2)) {
+        goto exit;
+    }
+    n = args[0];
+    k = args[1];
+    return_value = math_perm_impl(module, n, k);
+
+exit:
+    return return_value;
+}
+
+PyDoc_STRVAR(math_comb__doc__,
+"comb($module, n, k, /)\n"
+"--\n"
+"\n"
+"Number of ways to choose k items from n items without repetition and without order.\n"
+"\n"
+"Evaluates to n! / (k! * (n - k)!) when k <= n and evaluates\n"
+"to zero when k > n.\n"
+"\n"
+"Also called the binomial coefficient because it is equivalent\n"
+"to the coefficient of k-th term in polynomial expansion of the\n"
+"expression (1 + x)**n.\n"
+"\n"
+"Raises TypeError if either of the arguments are not integers.\n"
+"Raises ValueError if either of the arguments are negative.");
+
+#define MATH_COMB_METHODDEF    \
+    {"comb", (PyCFunction)(void(*)(void))math_comb, METH_FASTCALL, math_comb__doc__},
+
+static PyObject *
+math_comb_impl(PyObject *module, PyObject *n, PyObject *k);
+
+static PyObject *
+math_comb(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    PyObject *return_value = NULL;
+    PyObject *n;
+    PyObject *k;
+
+    if (!_PyArg_CheckPositional("comb", nargs, 2, 2)) {
+        goto exit;
+    }
+    n = args[0];
+    k = args[1];
+    return_value = math_comb_impl(module, n, k);
+
+exit:
+    return return_value;
+}
+/*[clinic end generated code: output=5004266613284dcc input=a9049054013a1b77]*/

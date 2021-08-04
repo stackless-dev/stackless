@@ -61,6 +61,7 @@ typedef struct _slp_methodflags {
     signed char bf_releasebuffer;
     signed char tp_dealloc;
     signed char tp_repr;
+    signed char tp_vectorcall_offset;
     signed char tp_call;
     signed char tp_str;
     signed char tp_iter;

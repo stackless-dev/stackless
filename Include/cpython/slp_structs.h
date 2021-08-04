@@ -91,7 +91,7 @@ extern "C" {
 #define SLP_TASKLET_FLAGS_OFFSET_pending_irq \
     (SLP_TASKLET_FLAGS_OFFSET_is_zombie + SLP_TASKLET_FLAGS_BITS_is_zombie)
 
-typedef struct _tasklet_flags {
+typedef struct _slp_tasklet_flags {
     signed int blocked: SLP_TASKLET_FLAGS_BITS_blocked;
     unsigned int atomic: SLP_TASKLET_FLAGS_BITS_atomic;
     unsigned int ignore_nesting: SLP_TASKLET_FLAGS_BITS_ignore_nesting;
@@ -101,16 +101,16 @@ typedef struct _tasklet_flags {
     unsigned int pending_irq: SLP_TASKLET_FLAGS_BITS_pending_irq;
 } PyTaskletFlagStruc;
 
-typedef struct _tasklet {
+typedef struct _slp_tasklet {
     PyObject_HEAD
-    struct _tasklet *next;
-    struct _tasklet *prev;
+    struct _slp_tasklet *next;
+    struct _slp_tasklet *prev;
     union {
         struct _frame *frame;
         struct _cframe *cframe;
     } f;
     PyObject *tempval;
-    struct _cstack *cstate;
+    struct _slp_cstack *cstate;
     /* Pointer to the top of the stack of the exceptions currently
      * being handled */
     _PyErr_StackItem *exc_info;
@@ -119,7 +119,7 @@ typedef struct _tasklet {
      */
     _PyErr_StackItem exc_state;
     /* bits stuff */
-    struct _tasklet_flags flags;
+    struct _slp_tasklet_flags flags;
     int recursion_depth;
     PyObject *def_globals;
     PyObject *tsk_weakreflist;
@@ -142,15 +142,15 @@ typedef struct _tasklet {
 
 /*** important structures: cstack ***/
 
-typedef struct _cstack {
+typedef struct _slp_cstack {
     PyObject_VAR_HEAD
-    struct _cstack *next;
-    struct _cstack *prev;
+    struct _slp_cstack *next;
+    struct _slp_cstack *prev;
     PY_LONG_LONG serial;
     /* A borrowed reference to the tasklet, that owns this cstack. NULL after
      * the stack has been restored. Always NULL for an initial stub.
      */
-    struct _tasklet *task;
+    struct _slp_tasklet *task;
     int nesting_level;
     PyThreadState *tstate;
 #ifdef SLP_SEH32
@@ -179,7 +179,7 @@ typedef struct _cstack {
 
 /*** important structures: bomb ***/
 
-typedef struct _bomb {
+typedef struct _slp_bomb {
     PyObject_HEAD
     PyObject *curexc_type;
     PyObject *curexc_value;
@@ -221,24 +221,24 @@ typedef struct _bomb {
 #define SLP_CHANNEL_FLAGS_OFFSET_schedule_all \
     (SLP_CHANNEL_FLAGS_OFFSET_preference + SLP_CHANNEL_FLAGS_BITS_preference)
 
-typedef struct _channel_flags {
+typedef struct _slp_channel_flags {
     unsigned int closing: SLP_CHANNEL_FLAGS_BITS_closing;
     signed int preference: SLP_CHANNEL_FLAGS_BITS_preference;
     unsigned int schedule_all: SLP_CHANNEL_FLAGS_BITS_schedule_all;
 } PyChannelFlagStruc;
 
-typedef struct _channel {
+typedef struct _slp_channel {
     PyObject_HEAD
     /* make sure that these fit tasklet's next/prev */
-    struct _tasklet *head;
-    struct _tasklet *tail;
+    struct _slp_tasklet *head;
+    struct _slp_tasklet *tail;
     int balance;
-    struct _channel_flags flags;
+    struct _slp_channel_flags flags;
     PyObject *chan_weakreflist;
 } PyChannelObject;
 
-struct _cframe;
-typedef PyObject *(PyFrame_ExecFunc) (struct _cframe *, int, PyObject *);
+struct _slp_cframe;
+typedef PyObject *(PyFrame_ExecFunc) (struct _slp_cframe *, int, PyObject *);
 /*
  * How to write frame execution functions:
  *
@@ -259,7 +259,7 @@ typedef PyObject *(PyFrame_ExecFunc) (struct _cframe *, int, PyObject *);
 
 /*** important stuctures: cframe ***/
 
-typedef struct _cframe {
+typedef struct _slp_cframe {
     PyObject_VAR_HEAD
     struct _frame *f_back;      /* previous frame, or NULL */
 
@@ -278,18 +278,18 @@ typedef struct _cframe {
     void *any2;
 } PyCFrameObject;
 
-typedef struct _unwindobject {
+typedef struct _slp_unwindobject {
     PyObject_HEAD
 } PyUnwindObject;
 
 
 #else /* #ifdef SLP_BUILD_CORE */
 
-typedef struct _channel PyChannelObject;
-typedef struct _cframe  PyCFrameObject;
-typedef struct _tasklet PyTaskletObject;
-typedef struct _unwindobject PyUnwindObject;
-typedef struct _bomb PyBombObject;
+typedef struct _slp_channel PyChannelObject;
+typedef struct _slp_cframe  PyCFrameObject;
+typedef struct _slp_tasklet PyTaskletObject;
+typedef struct _slp_unwindobject PyUnwindObject;
+typedef struct _slp_bomb PyBombObject;
 
 #endif /* #ifdef SLP_BUILD_CORE */
 

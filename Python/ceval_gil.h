@@ -144,6 +144,9 @@ static void recreate_gil(struct _gil_runtime_state *gil)
 static void
 drop_gil(struct _ceval_runtime_state *ceval, PyThreadState *tstate)
 {
+#ifdef STACKLESS
+    /* 1: a non vectorcall function did not reset _PyStackless_TRY_STACKLESS */
+    assert(1 != _PyStackless_TRY_STACKLESS);
     /*
      * The flag _PyStackless_TRY_STACKLESS is shared between threads
      * and interpreters. If a function, that does not support the
@@ -152,6 +155,7 @@ drop_gil(struct _ceval_runtime_state *ceval, PyThreadState *tstate)
      * to other threads. To prevent this, it is reset here.
      */
     STACKLESS_RETRACT();
+#endif
     struct _gil_runtime_state *gil = &ceval->gil;
     if (!_Py_atomic_load_relaxed(&gil->locked)) {
         Py_FatalError("drop_gil: GIL is not locked");

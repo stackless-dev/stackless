@@ -3,12 +3,12 @@
 #ifndef Py_LIMITED_API
 
 /* forward declarations */
-struct _cstack;
-struct _bomb;
-struct _tasklet;
+struct _slp_cstack;
+struct _slp_bomb;
+struct _slp_tasklet;
 struct _ts;
 
-typedef int (slp_schedule_hook_func) (struct _tasklet *from, struct _tasklet *to);
+typedef int (slp_schedule_hook_func) (struct _slp_tasklet *from, struct _slp_tasklet *to);
 
 struct _frame; /* Avoid including frameobject.h */
 
@@ -22,15 +22,15 @@ typedef struct _sts {
     PY_LONG_LONG serial;
     PY_LONG_LONG serial_last_jump;
     /* the blueprint for new stacks */
-    struct _cstack *initial_stub;
+    struct _slp_cstack *initial_stub;
     /* the base address for hijacking stacks. XXX deprecating */
     intptr_t *cstack_base;
     /* stack overflow check and init flag */
     intptr_t *cstack_root;
     /* main tasklet */
-    struct _tasklet *main;
+    struct _slp_tasklet *main;
     /* runnable tasklets */
-    struct _tasklet *current;
+    struct _slp_tasklet *current;
 
     /* scheduling */
     long tick_counter;

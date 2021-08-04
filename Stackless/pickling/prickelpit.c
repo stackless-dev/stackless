@@ -149,44 +149,16 @@ static PyMethodDef prefix##_methods[] = { \
  \
 static struct _typeobject wrap_##type = { \
     PyVarObject_HEAD_INIT(&PyType_Type, 0) \
-    "_stackless._wrap." name, \
-    0, \
-    0, \
-    (destructor)_wrap_dealloc,              /* tp_dealloc */ \
-    0,                                          /* tp_print */ \
-    0,                                          /* tp_getattr */ \
-    0,                                          /* tp_setattr */ \
-    0,                                          /* tp_compare */ \
-    0,                                          /* tp_repr */ \
-    0,                                          /* tp_as_number */ \
-    0,                                          /* tp_as_sequence */ \
-    0,                                          /* tp_as_mapping */ \
-    0,                                          /* tp_hash */ \
-    0,                                          /* tp_call */ \
-    0,                                          /* tp_str */ \
-    PyObject_GenericGetAttr,                    /* tp_getattro */ \
-    PyObject_GenericSetAttr,                    /* tp_setattro */ \
-    0,                                          /* tp_as_buffer */ \
-    0,                                          /* tp_flags */ \
-    0,                                          /* tp_doc */ \
-    (traverseproc) _wrap_traverse,              /* tp_traverse */ \
-    (inquiry) _wrap_clear,                  /* tp_clear */ \
-    0,                                          /* tp_richcompare */ \
-    0,                                          /* tp_weaklistoffset */ \
-    0,                                          /* tp_iter */ \
-    0,                                          /* tp_iternext */ \
-    prefix##_methods,                           /* tp_methods */ \
-    0,                                          /* tp_members */ \
-    0,                                          /* tp_getset */ \
-    &type,                                      /* tp_base */ \
-    0,                                          /* tp_dict */ \
-    0,                                          /* tp_descr_get */ \
-    0,                                          /* tp_descr_set */ \
-    0,                                          /* tp_dictoffset */ \
-    slp_generic_init,                           /* tp_init */ \
-    0,                                          /* tp_alloc */ \
-    newfunc,                                    /* tp_new */ \
-    0,                                          /* tp_free */ \
+    .tp_name = "_stackless._wrap." name, \
+    .tp_dealloc = (destructor)_wrap_dealloc, \
+    .tp_getattro = PyObject_GenericGetAttr, \
+    .tp_setattro = PyObject_GenericSetAttr, \
+    .tp_traverse = (traverseproc) _wrap_traverse, \
+    .tp_clear = (inquiry) _wrap_clear, \
+    .tp_methods = prefix##_methods, \
+    .tp_base = &type, \
+    .tp_init = slp_generic_init, \
+    .tp_new = newfunc, \
 };
 
 

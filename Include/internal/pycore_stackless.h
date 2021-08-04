@@ -785,29 +785,29 @@ long slp_parse_thread_id(PyObject *thread_id, unsigned long *id);
 /* Frame is invalid and PyEval_EvalFrameEx_slp must raise an exception.
  * Only set, if the frame was unpickled and had C-state on the stack.
  */
-#define SLP_FRAME_EXECUTING_INVALID (-1)
+#define SLP_FRAME_EXECUTING_INVALID ((char)-1)
 
 /* Frame is new or completely executed. */
-#define SLP_FRAME_EXECUTING_NO 0
+#define SLP_FRAME_EXECUTING_NO ((char)0)
 
 /* Frame is executing, value in retval is valid and must be pushed onto the stack. */
-#define SLP_FRAME_EXECUTING_VALUE 1
+#define SLP_FRAME_EXECUTING_VALUE ((char)1)
 
 /* Frame is executing, ignore value in retval.
  * This is used at the start of a frame or after an interrupt. */
-#define SLP_FRAME_EXECUTING_NOVAL 2
+#define SLP_FRAME_EXECUTING_NOVAL ((char)2)
 
 /* Frame is executing, continue opcode ITER */
-#define SLP_FRAME_EXECUTING_ITER 3
+#define SLP_FRAME_EXECUTING_ITER ((char)3)
 
 /* Frame is executing, continue opcode SETUP_WITH */
-#define SLP_FRAME_EXECUTING_SETUP_WITH 4
+#define SLP_FRAME_EXECUTING_SETUP_WITH ((char)4)
 
 /* Frame is executing, continue opcode WITH_CLEANUP */
-#define SLP_FRAME_EXECUTING_WITH_CLEANUP 5
+#define SLP_FRAME_EXECUTING_WITH_CLEANUP ((char)5)
 
 /* Frame is executing, continue opcode YIELD_FROM */
-#define SLP_FRAME_EXECUTING_YIELD_FROM 6
+#define SLP_FRAME_EXECUTING_YIELD_FROM ((char)6)
 
 /* Test, if the frame is executing */
 #define SLP_FRAME_IS_EXECUTING(frame_) \

@@ -186,34 +186,16 @@ cstack_str(PyObject *o)
 
 PyTypeObject PyCStack_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "_stackless.cstack",
-    sizeof(PyCStackObject),
-    sizeof(PyObject *),
-    (destructor)cstack_dealloc,         /* tp_dealloc */
-    0,                                  /* tp_print */
-    0,                                  /* tp_getattr */
-    0,                                  /* tp_setattr */
-    0,                                  /* tp_compare */
-    0,                                  /* tp_repr */
-    0,                                  /* tp_as_number */
-    0,                                  /* tp_as_sequence */
-    0,                                  /* tp_as_mapping */
-    0,                                  /* tp_hash */
-    0,                                  /* tp_call */
-    (reprfunc)cstack_str,               /* tp_str */
-    PyObject_GenericGetAttr,            /* tp_getattro */
-    PyObject_GenericSetAttr,            /* tp_setattro */
-    0,                                  /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,                 /* tp_flags */
-    cstack_doc,                         /* tp_doc */
-    0,                                  /* tp_traverse */
-    0,                                  /* tp_clear */
-    0,                                  /* tp_richcompare */
-    0,                                  /* tp_weaklistoffset */
-    0,                                  /* tp_iter */
-    0,                                  /* tp_iternext */
-    0,                                  /* tp_methods */
-    cstack_members,                     /* tp_members */
+    .tp_name = "_stackless.cstack",
+    .tp_basicsize = sizeof(PyCStackObject),
+    .tp_itemsize = sizeof(PyObject *),
+    .tp_dealloc = (destructor)cstack_dealloc,
+    .tp_str = (reprfunc)cstack_str,
+    .tp_getattro = PyObject_GenericGetAttr,
+    .tp_setattro = PyObject_GenericSetAttr,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_doc = cstack_doc,
+    .tp_members = cstack_members
 };
 
 
@@ -970,19 +952,9 @@ static void unwind_dealloc(PyObject *op) {
 
 static PyTypeObject PyUnwindToken_Type = {
     PyVarObject_HEAD_INIT(&PyUnwindToken_Type, 0)
-    "UnwindToken",
-    0,
-    0,
-    (destructor)unwind_dealloc, /*tp_dealloc*/ /*should never be called*/
-    0,                  /*tp_print*/
-    0,                  /*tp_getattr*/
-    0,                  /*tp_setattr*/
-    0,                  /*tp_compare*/
-    (reprfunc)unwind_repr, /*tp_repr*/
-    0,                  /*tp_as_number*/
-    0,                  /*tp_as_sequence*/
-    0,                  /*tp_as_mapping*/
-    0,                  /*tp_hash */
+    .tp_name = "UnwindToken",
+    .tp_dealloc = (destructor)unwind_dealloc, /*should never be called*/
+    .tp_repr = (reprfunc)unwind_repr
 };
 
 static PyUnwindObject unwind_token = {

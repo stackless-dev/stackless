@@ -9,6 +9,16 @@ What's New in Stackless 3.X.X?
 
 *Release date: 20XX-XX-XX*
 
+- https://github.com/stackless-dev/stackless/issues/297
+  Stackless now works on Linux ARM64 (architecture "aarch64").
+
+- https://github.com/stackless-dev/stackless/issues/296
+  It is now possible to cross-compile Stackless for Windows on ARM and ARM64.
+
+- https://github.com/stackless-dev/stackless/issues/295
+  Add prefix "_slp" to structure names without a prefix. The following structs
+  were renamed: _channel, _cframe, _tasklet, _unwindobject and _bomb.
+
 - https://github.com/stackless-dev/stackless/issues/290
   The newly added PEP-590 Vectorcall protocol (bpo-36974) requires changes to
   the Stackless protocol. The new mcros STACKLESS_VECTORCALL_xxx() must be used

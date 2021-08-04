@@ -1218,47 +1218,26 @@ static PyMappingMethods channel_as_mapping = {
 
 PyTypeObject PyChannel_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "_stackless.channel",
-    sizeof(PyChannelObject),
-    0,
-    (destructor)channel_dealloc,                /* tp_dealloc */
-    0,                                          /* tp_print */
-    0,                                          /* tp_getattr */
-    0,                                          /* tp_setattr */
-    0,                                          /* tp_compare */
-    0,                                          /* tp_repr */
-    0,                                          /* tp_as_number */
-    0,                                          /* tp_as_sequence */
-    SLP_TP_AS_MAPPING(channel_as_mapping),      /* tp_as_mapping */
-    0,                                          /* tp_hash */
-    0,                                          /* tp_call */
-    0,                                          /* tp_str */
-    PyObject_GenericGetAttr,                    /* tp_getattro */
-    PyObject_GenericSetAttr,                    /* tp_setattro */
-    0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+    .tp_name = "_stackless.channel",
+    .tp_basicsize = sizeof(PyChannelObject),
+    .tp_dealloc = (destructor)channel_dealloc,
+    .tp_as_mapping = SLP_TP_AS_MAPPING(channel_as_mapping),
+    .tp_getattro = PyObject_GenericGetAttr,
+    .tp_setattro = PyObject_GenericSetAttr,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
         Py_TPFLAGS_BASETYPE |
-        Py_TPFLAGS_HAVE_STACKLESS_EXTENSION,    /* tp_flags */
-    channel__doc__,                             /* tp_doc */
-    (traverseproc)channel_traverse,             /* tp_traverse */
-    (inquiry) channel_clear,                    /* tp_clear */
-    0,                                          /* tp_richcompare */
-    offsetof(PyChannelObject, chan_weakreflist),
-                                            /* tp_weaklistoffset */
-    (getiterfunc)channel_getiter,               /* tp_iter */
-    (iternextfunc)channel_iternext,             /* tp_iternext */
-    channel_methods,                            /* tp_methods */
-    channel_members,                            /* tp_members */
-    channel_getsetlist,                         /* tp_getset */
-    0,                                          /* tp_base */
-    0,                                          /* tp_dict */
-    0,                                          /* tp_descr_get */
-    0,                                          /* tp_descr_set */
-    0,                                          /* tp_dictoffset */
-    0,                                          /* tp_init */
-    0,                                          /* tp_alloc */
-    channel_new,                                /* tp_new */
-    PyObject_GC_Del,                            /* tp_free */
+        Py_TPFLAGS_HAVE_STACKLESS_EXTENSION,
+    .tp_doc = channel__doc__,
+    .tp_traverse = (traverseproc)channel_traverse,
+    .tp_clear = (inquiry) channel_clear,
+    .tp_weaklistoffset = offsetof(PyChannelObject, chan_weakreflist),
+    .tp_iter = (getiterfunc)channel_getiter,
+    .tp_iternext = (iternextfunc)channel_iternext,
+    .tp_methods = channel_methods,
+    .tp_members = channel_members,
+    .tp_getset = channel_getsetlist,
+    .tp_new = channel_new,
+    .tp_free = PyObject_GC_Del,
 };
 
 #endif

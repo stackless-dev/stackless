@@ -1,5 +1,8 @@
 #include "Python.h"
 #include <stddef.h> /* For ptrdiff_t */
+#ifdef _MSC_VER
+#include <malloc.h>  /* for alloca */
+#endif /* _MSC_VER */
 
 #ifdef STACKLESS
 
@@ -100,8 +103,18 @@ or disable the STACKLESS flag.
 /* stack size in pointer to trigger stack spilling */
 
 #ifndef SLP_CSTACK_WATERMARK
+/* If the compiler does not inline, each Python-interpreter recursion needs much more
+ * C-stack. Therefore we try to increase the stack a bit.
+ *
+ * GCC: __NO_INLINE__ is defined if no functions will be inlined into their callers
+ *      (when not optimizing, or when inlining has been specifically disabled by -fno-inline).
+ */
+#ifndef __NO_INLINE__
 #define SLP_CSTACK_WATERMARK 16384
+#else
+#define SLP_CSTACK_WATERMARK (16384*2)
 #endif
+#endif  /* #ifndef SLP_CSTACK_WATERMARK */
 
 /* define direction of stack growth */
 
