@@ -453,10 +453,11 @@ STACKLESS_PROMOTE_ALL()
   function.
 
   The macro STACKLESS_PROMOTE_ALL() does this unconditionally. It is used for
-  cases where we know that the called function will take care of our object,
-  and we need no test. For example, PyObject_Call() and all other
-  Py{Object,Function,CFunction}_*Call* functions use STACKLESS_PROMOTE_xxx
-  itself, so we don’t need to check further.
+  cases where we know that the called function obeys the stackless-protocol
+  by calling STACKLESS_GETARG() and possibly returning the unwind token.
+  For example, PyObject_Call() and all other Py{Object,Function,CFunction}_*Call*
+  functions use STACKLESS_GETARG() and STACKLESS_PROMOTE_xxx itself, so we
+  don’t need to check further.
 
 STACKLESS_PROMOTE(func)
 

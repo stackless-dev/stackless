@@ -70,26 +70,70 @@ typedef struct {
  */
 struct _stackless_runtime_state {
     /*
-     * try_stackless: flag whether the next call should try to be stackless.
+     * Note: The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+     *       "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL"
+     *       in this comment are to be interpreted as described in RFC 2119.
      *
-     * Possible values:
-     *   0: don't be stackless
-     *   1: any called C-function shall try to be stackless.
-     *   other: only the C-function with address try_stackless shall try to
-     *          by stackless.
+     * 'try_stackless': flag whether the next call into the interpreter should
+     *                  try to be stackless
      *
-     * The protocol is: This flag may be only set to 1 if the called
-     * thing supports it. It doesn't matter whether it uses the
-     * chance, but it *must* set it to zero before returning.
+     *   This flags in a way serves as a parameter that we don't have. It can
+     *   be accessed as a L-value using the macro '_PyStackless_TRY_STACKLESS'.
      *
-     * This flag may be set to the address of a directly called C-function.
-     * It is not required, that the called function supports stackless
-     * calls.
+     * Possible values of 'try_stackless' / '_PyStackless_TRY_STACKLESS':
      *
-     * This flags in a way serves as a parameter that we don't have.
+     *   0: Stackless calls are not possible, the called function MUST NOT
+     *      return Py_UnwindToken.
      *
-     * As long as the GIL is shared between sub-interpreters,
-     * try_stackless can be a field in the runtime state.
+     *   1: Stackless calls are possible. The called function MUST ensure that
+     *      _PyStackless_TRY_STACKLESS is 0 on its return.
+     *
+     *   other: if the value of _PyStackless_TRY_STACKLESS is the address of the
+     *          called function, Stackless calls are possible. The called function
+     *
+     *          - either MUST NOT modify the value of _PyStackless_TRY_STACKLESS
+     *            (case for unmodified C-Python functions).
+     *
+     *          - or MUST ensure that _PyStackless_TRY_STACKLESS is 0 on its
+     *            return (case for stackless aware functions).
+     *
+     *   (If a stackless call is possible, the called function SHOULD return
+     *   Py_UnwindToken and insert an appropriate (C)-frame into the frame chain if
+     *   otherwise a recursive call into the Python interpreter would have to be made.
+     *   To do so, the called function MAY call a sub-function with
+     *   _PyStackless_TRY_STACKLESS set to a non-zero value (see macros STACKLESS_PROMOTE_xxx,
+     *   STACKLESS_ASSERT and STACKLESS_VECTORCALL) and return the result of the
+     *   sub-function.)
+     *
+     * The protocol for the caller is:
+     *
+     *   This flag MAY be only set to 1 if the called thing is stackless aware
+     *   (== obeys the stackless-protocol == calls STACKLESS_GETARG() directly
+     *   or indirectly). It doesn't matter whether it uses the chance, but it
+     *   MUST set _PyStackless_TRY_STACKLESS to zero before returning.
+     *
+     *   This flag may be set to the address of a directly called C-function.
+     *   It is not required, that the called function supports stackless
+     *   calls. This variant is used for "vectorcall"-functions (see PEP-590). If
+     *   a type supports the vectorcall-protocol, the called C-function not is stored
+     *   in a slot of the type object. Instead each instance of the type has its own
+     *   function pointer.This makes it impossible to decide if the function to be called
+     *   obeys the stackless-protocol and therefore a vectorcall-function MUST NOT
+     *   be called with _PyStackless_TRY_STACKLESS set to 1.
+     *
+     * In theory we could always set _PyStackless_TRY_STACKLESS the address of the
+     * called function, but this would not be efficient. A function, that only wraps
+     * another stackless-aware function, does not need to use STACKLESS_GETARG(),
+     * STACKLESS_PROMOTE_xxx and STACKLESS_ASSERT(). Also some stackless-aware functions
+     * are "static inline" and have no address.
+     *
+     * To prevent leakage of a non zero value of _PyStackless_TRY_STACKLESS to other
+     * threads, a thread must reset _PyStackless_TRY_STACKLESS before it drops the GIL.
+     * This is done in the C-function drop_gil.
+     *
+     * As long as the GIL is shared between sub-interpreters and the runtime-state is a
+     * global variable, "try_stackless" should be a field in the runtime state.
+     * Once the GIL is no longer shared, we should move the flag into the thread state.
      */
     intptr_t try_stackless;
 

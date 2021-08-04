@@ -479,7 +479,7 @@ Typedef ``slp_softswitchablefunc``::
   Initialize the fields :c:member:`PyStacklessFunctionDeclarationObject.name` and
   :c:member:`PyStacklessFunctionDeclarationObject.module_name` of *sfd*.
 
-Within the body of a soft-switchable extension function (or any other C-function, that obyes the stackless-protocol)
+Within the body of a soft-switchable extension function (or any other C-function, that obeys the stackless-protocol)
 you need the following macros.
 
 Macros for the "Stackless-protocol"
