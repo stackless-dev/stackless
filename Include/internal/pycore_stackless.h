@@ -816,7 +816,7 @@ long slp_parse_thread_id(PyObject *thread_id, unsigned long *id);
 
 /* Frame is executing, ignore value in retval.
  * This is used, if the eval_frame hook is in use. */
-#define SLP_FRAME_EXECUTING_HOOK 100
+#define SLP_FRAME_EXECUTING_HOOK ((char)100)
 
 /* Defined in slp_transfer.c */
 int
