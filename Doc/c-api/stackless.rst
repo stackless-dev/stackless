@@ -3,6 +3,28 @@
 |SLP| C-API
 ===========
 
+|SLP| uses two fundamentally different methods to switch control
+flow from one tasklet to another. One method, called *hard-switching*,
+manipulates the C-stack with hardware-dependent assembly code. This is always
+possible, but somewhat costly. The other method, called *soft-switching*, is
+only possible under special conditions, but is cheap. Moreover, soft-switching
+allows the storage (pickling) and recovery (unpickling) of active tasklets.
+
+Soft-switching avoids recursive calls to the |PY| interpreter, such as those
+that occur when calling a |PY| function, by maintaining a chained list of
+tasks that are processed sequentially. This list consists of
+:c:type:`PyFrameObject` and :c:type:`PyCFrameObject`
+objects chained by their :c:member:`PyFrameObject.f_back` pointer. In the C-function
+:c:func:`slp_dispatch` (and :c:func:`slp_dispatch_top`) the list is processed
+in a loop. In order to proceed
+to the processing of the next (C)frame, all C-functions involved in the
+processing of the current (C)frame must return. A special return value
+Unwind-Token is used here. If a C-function returns the value :c:data:`Py_UnwindToken`,
+its caller must add any unfinished tasks to the (C)frame list and return
+:c:data:`Py_UnwindToken` itself. It follows that *soft-switching* is only possible if
+it is supported by all functions just called. If this is not the case,
+*hard-switching* remains as a fallback.
+
 .. note::
 
    Some switching functions have a variant with the
@@ -383,21 +405,21 @@ Soft-switchable extension functions
    The API for soft-switchable extension function has been added on a
    provisional basis (see :pep:`411` for details.)
 
-A soft switchable extension function or method is a function or method defined
+A soft-switchable extension function or method is a function or method defined
 by an extension module written in C. In contrast to an normal C-function you
 can soft-switch tasklets while this function executes. Soft-switchable functions
-obey the stackless-protocol. At the C-language level
+obey the Stackless-protocol. At the C-language level
 such a function or method is made from 3 C-definitions:
 
 1. A declaration object of type :c:type:`PyStacklessFunctionDeclaration_Type`.
    It declares the soft-switchable function and must be declared as a global
    variable.
 2. A conventional extension function, that uses
-   :c:func:`PyStackless_CallFunction` to call the soft switchable function.
+   :c:func:`PyStackless_CallFunction` to call the soft-switchable function.
 3. A C-function of type ``slp_softswitchablefunc``. This function provides the
-   implemantation of the soft switchable function.
+   implemantation of the soft-switchable function.
 
-To create a soft switchable function declaration simply define it as a static
+To create a soft-switchable function declaration simply define it as a static
 variable and call :c:func:`PyStackless_InitFunctionDeclaration` from your
 module init code to initialise it. See the example code in the source
 of the extension module `_teststackless <https://github.com/stackless-dev/stackless/blob/master-slp/Stackless/module/_teststackless.c>`_.
@@ -410,7 +432,7 @@ Typedef ``slp_softswitchablefunc``::
 
 .. c:type:: PyStacklessFunctionDeclarationObject
 
-  This subtype of :c:type:`PyObject` represents a Stackless soft switchable
+  This subtype of :c:type:`PyObject` represents a Stackless soft-switchable
   extension function declaration object.
 
   Here is the structure definition::
@@ -437,7 +459,7 @@ Typedef ``slp_softswitchablefunc``::
 .. c:var:: PyTypeObject PyStacklessFunctionDeclaration_Type
 
   This instance of :c:type:`PyTypeObject` represents the Stackless
-  soft switchable extension function declaration type.
+  soft-switchable extension function declaration type.
 
 .. c:function:: int PyStacklessFunctionDeclarationType_CheckExact(PyObject *p)
 
@@ -446,7 +468,7 @@ Typedef ``slp_softswitchablefunc``::
 
 .. c:function:: PyObject* PyStackless_CallFunction(PyStacklessFunctionDeclarationObject *sfd, PyObject *arg, PyObject *ob1, PyObject *ob2, PyObject *ob3, long n, void *any)
 
-  Invoke the soft switchable extension, which is represented by *sfd*.
+  Invoke the soft-switchable extension, which is represented by *sfd*.
   Pass *arg* as initial value for argument *retval* and *ob1*, *ob2*, *ob3*,
   *n* and *any* as general purpose in-out-arguments.
 
@@ -457,46 +479,72 @@ Typedef ``slp_softswitchablefunc``::
   Initialize the fields :c:member:`PyStacklessFunctionDeclarationObject.name` and
   :c:member:`PyStacklessFunctionDeclarationObject.module_name` of *sfd*.
 
-Within the body of a soft switchable extension function (or any other C-function, that obyes the stackless-protocol)
+Within the body of a soft-switchable extension function (or any other C-function, that obeys the stackless-protocol)
 you need the following macros.
 
-Macros for the "stackless-protocol"
+Macros for the "Stackless-protocol"
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-How to does Stackless Python decide, if a function may return an unwind-token?
-There is one global variable "_PyStackless_TRY_STACKLESS"[#]_ which is used
-like an implicit parameter. Since we don't have a real parameter,
-the flag is copied into the local variable "stackless" and cleared.
-This is done by the STACKLESS_GETARG() macro, which should be added to
-the top of the function's declarations.
 
-The idea is to keep the chances to introduce error to the minimum.
-A function can safely do some tests and return before calling
-anything, since the flag is in a local variable.
-Depending on context, this flag is propagated to other called
-functions. They *must* obey the protocol. To make this sure,
-the STACKLESS_ASSERT() macro has to be called after every such call.
+How does a C-function in |SLP| decide whether it may return
+:c:data:`Py_UnwindToken`? (After all, this is only allowed if the caller can handle
+:c:data:`Py_UnwindToken`). The obvious thing would be to use your own function
+argument, but that would change the function prototypes and thus
+Python's C-API. This is not practical. Instead, the global variable
+"_PyStackless_TRY_STACKLESS"[#f1]_ is used as an implicit parameter.
+
+The content of this variable is moved to the local variable "stackless"
+at the beginning of a C function. In the process, "_PyStackless_TRY_STACKLESS"
+is set to 0, indicating that no unwind-token may be returned.
+This is done with the macro :c:func:`STACKLESS_GETARG` or, for vectorcall [#f2]_ functions,
+with the macro :c:func:`STACKLESS_VECTORCALL_GETARG`, which should be added at the
+beginning of the function declaration.
+
+This design minimizes the possibility of introducing errors due to improper
+return of :c:data:`Py_UnwindToken`. The function can contain arbitrary code because the
+flag is hidden in a local variable. If the function is to support
+*soft-switching*, it must be further adapted. The flag may only be passed to
+other called functions if they adhere to the Stackless-protocol. The macros
+STACKLESS_PROMOTExxx() serve this purpose. To ensure compliance with the
+protocol, the macro :c:func:`STACKLESS_ASSERT` must be called after each such call.
+An exception is the call of vectorcall functions. The call of a vectorcall
+function must be framed with the macros :c:func:`STACKLESS_VECTORCALL_BEFORE` and
+:c:func:`STACKLESS_VECTORCALL_AFTER` or - more simply - performed with the macro
+:c:func:`STACKLESS_VECTORCALL`.
 
 Many internal functions have been patched to support this protocol.
 Their first action is a direct or indirect call of the macro
-:c:func:`STACKLESS_GETARG`.
+:c:func:`STACKLESS_GETARG` or :c:func:`STACKLESS_VECTORCALL_GETARG`.
 
 .. c:function:: STACKLESS_GETARG()
 
-  Define the local variable ``int stackless`` and move the global
-  "_PyStackless_TRY_STACKLESS" flag into the local variable "stackless".
-  After a call to :c:func:`STACKLESS_GETARG` the value of
+  Define and initialize the local variable ``int stackless``.
+  The value of *stackless* is non-zero, if the function may return
+  :c:data:`Py_UnwindToken`.
+  After a call to :c:func:`STACKLESS_GETARG` the value of the global variable
   "_PyStackless_TRY_STACKLESS" is 0.
+
+.. c:function:: STACKLESS_VECTORCALL_GETARG(func)
+
+  .. versionadded:: 3.8.0
+
+  Vectorcall variant of the macro :c:func:`STACKLESS_GETARG`. Functions of type
+  :c:type:`vectorcallfunc` must use :c:func:`STACKLESS_VECTORCALL_GETARG` instead
+  of :c:func:`STACKLESS_GETARG`. The argument *func* must be set to the vectorcall
+  function itself. See function :c:func:`_PyCFunction_Vectorcall` for an example.
 
 .. c:function:: STACKLESS_PROMOTE_ALL()
 
-  All STACKLESS_PROMOTE_xxx macros are used to propagate the stackless-flag
+  All STACKLESS_PROMOTExxx() macros are used to propagate the stackless-flag
   from the local variable "stackless" to the global variable
-  "_PyStackless_TRY_STACKLESS". The macro :c:func:`STACKLESS_PROMOTE_ALL` does
-  this unconditionally. It is used for cases where we know that the called
-  function will take care of our object, and we need no test. For example,
-  :c:func:`PyObject_Call` and all other Py{Object,Function,CFunction}_*Call*
-  functions use STACKLESS_PROMOTE_xxx itself, so we don't need to check further.
+  "_PyStackless_TRY_STACKLESS". These macros can't be used to call a vectorcall [#f2]_ function.
+
+  The macro :c:func:`STACKLESS_PROMOTE_ALL` does this unconditionally.
+  It is used for cases where we know that the called function obeys
+  the stackless-protocol by calling STACKLESS_GETARG() and possibly
+  returning the unwind token. For example, PyObject_Call() and all other
+  Py{Object,Function,CFunction}_*Call* functions use STACKLESS_GETARG() and
+  STACKLESS_PROMOTE_xxx itself, so we don’t need to check further.
 
 .. c:function:: STACKLESS_PROMOTE_FLAG(flag)
 
@@ -539,6 +587,40 @@ Their first action is a direct or indirect call of the macro
   Set the global variable "_PyStackless_TRY_STACKLESS" unconditionally to 0.
   Rarely used.
 
+.. c:function:: STACKLESS_VECTORCALL_BEFORE(func)
+
+.. c:function:: STACKLESS_VECTORCALL_AFTER(func)
+
+  .. versionadded:: 3.8.0
+
+  If a C-function needs to propagate the stackless-flag
+  from the local variable "stackless" to the global variable
+  "_PyStackless_TRY_STACKLESS" in order to call a vectorcall [#f2]_ function, it
+  must frame the call with these macros. Set the argument *func* to the called
+  function. The called function *func* is not required to support the
+  Stackless-protocol. [#f3]_ Example:
+
+  .. code-block:: C
+
+     STACKLESS_GETARG();
+     vectorcallfunc func = a_vectorcal_function;
+
+     /* other code */
+
+     STACKLESS_VECTORCALL_BEFORE(func);
+     PyObject * result = func(callable, args, nargsf, kwnames);
+     STACKLESS_VECTORCALL_AFTER(func);
+     return result;
+
+.. c:function:: STACKLESS_VECTORCALL(func, callable, args, nargsf, kwnames)
+
+  .. versionadded:: 3.8.0
+
+  Call the vectorcall function *func* with the given arguments and return
+  the result. It is a convenient alternative to the macros
+  :c:func:`STACKLESS_VECTORCALL_BEFORE` and :c:func:`STACKLESS_VECTORCALL_AFTER`.
+  The called function *func* is not required to support the Stackless-protocol.
+
 Examples
 ~~~~~~~~
 
@@ -557,8 +639,17 @@ Another, more realistic example is :py:const:`_asyncio._task_step_impl_stackless
 "Modules/_asynciomodules.c".
 
 
-.. [#] Actually "_PyStackless_TRY_STACKLESS" is a macro that expands to a C L-value. As long as
+.. [#f1] Actually "_PyStackless_TRY_STACKLESS" is a macro that expands to a C L-value. As long as
        |CPY| uses the GIL, this L-value is a global variable.
+
+.. [#f2] See :pep:`590` Vectorcall: a fast calling protocol for CPython
+
+.. [#f3] If a |PY| type supports the :pep:`590` Vectorcall-protocol the actual :c:type:`vectorcallfunc`
+       C-function is a per object property. This speeds up calling vectorcall functions on classes,
+       but the consequence is, that it is no longer possible to use a flag in the type to indicate,
+       if the vectorcall slot supports the Stackless-protocol. Therefore |SLP|
+       has special macros to deal with vectorcall functions.
+
 
 Debugging and monitoring Functions
 ----------------------------------

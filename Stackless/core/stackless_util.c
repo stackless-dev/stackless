@@ -3,7 +3,7 @@
 #ifdef STACKLESS
 #include "pycore_stackless.h"
 
-int * const _PyStackless__TryStacklessPtr = &_PyStackless_TRY_STACKLESS;
+intptr_t * const _PyStackless__TryStacklessPtr = &_PyStackless_TRY_STACKLESS;
 
 /* Initialize the Stackless runtime state */
 void

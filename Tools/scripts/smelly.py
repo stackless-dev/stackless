@@ -28,7 +28,7 @@ def get_smelly_symbols(stdout):
     symbols = []
     ignored_symtypes = set()
 
-    allowed_prefixes = ('Py', '_Py', 'slp_')
+    allowed_prefixes = ('Py', '_Py', 'slp_', 'stackman_')
     if sys.platform == 'darwin':
         allowed_prefixes += ('__Py',)
 

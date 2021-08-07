@@ -235,6 +235,7 @@ frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno, void *Py_UNUSED(ignore
      * the 'finally' blocks. */
     memset(blockstack, '\0', sizeof(blockstack));
     blockstack_top = 0;
+    unsigned char prevop = NOP;
     for (addr = 0; addr < code_len; addr += sizeof(_Py_CODEUNIT)) {
         unsigned char op = code[addr];
         switch (op) {
@@ -261,17 +262,24 @@ frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno, void *Py_UNUSED(ignore
                                 "can't jump into the middle of a block");
                 return -1;
             }
+            int in_for_loop = op == FOR_ITER || code[target_addr] == END_ASYNC_FOR;
             if (first_in && !second_in) {
-                if (op != FOR_ITER && code[target_addr] != END_ASYNC_FOR) {
+                if (!delta_iblock) {
+                    if (in_for_loop) {
+                        /* Pop the iterators of any 'for' and 'async for' loop
+                         * we're jumping out of. */
+                        delta++;
+                    }
+                    else if (prevop == LOAD_CONST) {
+                        /* Pops None pushed before SETUP_FINALLY. */
+                        delta++;
+                    }
+                }
+                if (!in_for_loop) {
                     delta_iblock++;
                 }
-                else if (!delta_iblock) {
-                    /* Pop the iterators of any 'for' and 'async for' loop
-                     * we're jumping out of. */
-                    delta++;
-                }
             }
-            if (op != FOR_ITER && code[target_addr] != END_ASYNC_FOR) {
+            if (!in_for_loop) {
                 blockstack[blockstack_top++] = target_addr;
             }
             break;
@@ -295,6 +303,7 @@ frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno, void *Py_UNUSED(ignore
             break;
         }
         }
+        prevop = op;
     }
 
     /* Verify that the blockstack tracking code didn't get lost. */
@@ -597,10 +606,10 @@ PyTypeObject PyFrame_Type = {
     sizeof(PyFrameObject),
     sizeof(PyObject *),
     (destructor)frame_dealloc,                  /* tp_dealloc */
-    0,                                          /* tp_print */
+    0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    0,                                          /* tp_reserved */
+    0,                                          /* tp_as_async */
     (reprfunc)frame_repr,                       /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */

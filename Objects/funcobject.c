@@ -37,6 +37,7 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     op->func_defaults = NULL; /* No default arguments */
     op->func_kwdefaults = NULL; /* No keyword only defaults */
     op->func_closure = NULL;
+    op->vectorcall = _PyFunction_Vectorcall;
 
     consts = ((PyCodeObject *)code)->co_consts;
     if (PyTuple_Size(consts) >= 1) {
@@ -251,6 +252,10 @@ static PyMemberDef func_memberlist[] = {
 static PyObject *
 func_get_code(PyFunctionObject *op, void *Py_UNUSED(ignored))
 {
+    if (PySys_Audit("object.__getattr__", "Os", op, "__code__") < 0) {
+        return NULL;
+    }
+
     Py_INCREF(op->func_code);
     return op->func_code;
 }
@@ -267,6 +272,12 @@ func_set_code(PyFunctionObject *op, PyObject *value, void *Py_UNUSED(ignored))
                         "__code__ must be set to a code object");
         return -1;
     }
+
+    if (PySys_Audit("object.__setattr__", "OsO",
+                    op, "__code__", value) < 0) {
+        return -1;
+    }
+
     nfree = PyCode_GetNumFree((PyCodeObject *)value);
     nclosure = (op->func_closure == NULL ? 0 :
             PyTuple_GET_SIZE(op->func_closure));
@@ -330,6 +341,9 @@ func_set_qualname(PyFunctionObject *op, PyObject *value, void *Py_UNUSED(ignored
 static PyObject *
 func_get_defaults(PyFunctionObject *op, void *Py_UNUSED(ignored))
 {
+    if (PySys_Audit("object.__getattr__", "Os", op, "__defaults__") < 0) {
+        return NULL;
+    }
     if (op->func_defaults == NULL) {
         Py_RETURN_NONE;
     }
@@ -349,6 +363,16 @@ func_set_defaults(PyFunctionObject *op, PyObject *value, void *Py_UNUSED(ignored
                         "__defaults__ must be set to a tuple object");
         return -1;
     }
+    if (value) {
+        if (PySys_Audit("object.__setattr__", "OsO",
+                        op, "__defaults__", value) < 0) {
+            return -1;
+        }
+    } else if (PySys_Audit("object.__delattr__", "Os",
+                           op, "__defaults__") < 0) {
+        return -1;
+    }
+
     Py_XINCREF(value);
     Py_XSETREF(op->func_defaults, value);
     return 0;
@@ -357,6 +381,10 @@ func_set_defaults(PyFunctionObject *op, PyObject *value, void *Py_UNUSED(ignored
 static PyObject *
 func_get_kwdefaults(PyFunctionObject *op, void *Py_UNUSED(ignored))
 {
+    if (PySys_Audit("object.__getattr__", "Os",
+                    op, "__kwdefaults__") < 0) {
+        return NULL;
+    }
     if (op->func_kwdefaults == NULL) {
         Py_RETURN_NONE;
     }
@@ -376,6 +404,16 @@ func_set_kwdefaults(PyFunctionObject *op, PyObject *value, void *Py_UNUSED(ignor
             "__kwdefaults__ must be set to a dict object");
         return -1;
     }
+    if (value) {
+        if (PySys_Audit("object.__setattr__", "OsO",
+                        op, "__kwdefaults__", value) < 0) {
+            return -1;
+        }
+    } else if (PySys_Audit("object.__delattr__", "Os",
+                           op, "__kwdefaults__") < 0) {
+        return -1;
+    }
+
     Py_XINCREF(value);
     Py_XSETREF(op->func_kwdefaults, value);
     return 0;
@@ -519,6 +557,9 @@ func_new_impl(PyTypeObject *type, PyCodeObject *code, PyObject *globals,
             }
         }
     }
+    if (PySys_Audit("function.__new__", "O", code) < 0) {
+        return NULL;
+    }
 
     newfunc = (PyFunctionObject *)PyFunction_New((PyObject *)code,
                                                  globals);
@@ -541,31 +582,23 @@ func_new_impl(PyTypeObject *type, PyCodeObject *code, PyObject *globals,
     return (PyObject *)newfunc;
 }
 
-static int
-func_clear(PyFunctionObject *op)
-{
-    Py_CLEAR(op->func_code);
-    Py_CLEAR(op->func_globals);
-    Py_CLEAR(op->func_module);
-    Py_CLEAR(op->func_name);
-    Py_CLEAR(op->func_defaults);
-    Py_CLEAR(op->func_kwdefaults);
-    Py_CLEAR(op->func_doc);
-    Py_CLEAR(op->func_dict);
-    Py_CLEAR(op->func_closure);
-    Py_CLEAR(op->func_annotations);
-    Py_CLEAR(op->func_qualname);
-    return 0;
-}
-
 static void
 func_dealloc(PyFunctionObject *op)
 {
     _PyObject_GC_UNTRACK(op);
-    if (op->func_weakreflist != NULL) {
+    if (op->func_weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) op);
-    }
-    (void)func_clear(op);
+    Py_DECREF(op->func_code);
+    Py_DECREF(op->func_globals);
+    Py_XDECREF(op->func_module);
+    Py_DECREF(op->func_name);
+    Py_XDECREF(op->func_defaults);
+    Py_XDECREF(op->func_kwdefaults);
+    Py_XDECREF(op->func_doc);
+    Py_XDECREF(op->func_dict);
+    Py_XDECREF(op->func_closure);
+    Py_XDECREF(op->func_annotations);
+    Py_XDECREF(op->func_qualname);
     PyObject_GC_Del(op);
 }
 
@@ -627,10 +660,10 @@ PyTypeObject PyFunction_Type = {
     sizeof(PyFunctionObject),
     0,
     (destructor)func_dealloc,                   /* tp_dealloc */
-    0,                                          /* tp_print */
+    offsetof(PyFunctionObject, vectorcall),     /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    0,                                          /* tp_reserved */
+    0,                                          /* tp_as_async */
     (reprfunc)func_repr,                        /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
@@ -642,10 +675,12 @@ PyTypeObject PyFunction_Type = {
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-    Py_TPFLAGS_HAVE_STACKLESS_EXTENSION,        /* tp_flags */
+    Py_TPFLAGS_HAVE_STACKLESS_EXTENSION |
+    _Py_TPFLAGS_HAVE_VECTORCALL |
+    Py_TPFLAGS_METHOD_DESCRIPTOR,               /* tp_flags */
     func_new__doc__,                            /* tp_doc */
     (traverseproc)func_traverse,                /* tp_traverse */
-    (inquiry)func_clear,                        /* tp_clear */
+    0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
     offsetof(PyFunctionObject, func_weakreflist), /* tp_weaklistoffset */
     0,                                          /* tp_iter */
@@ -801,10 +836,10 @@ PyTypeObject PyClassMethod_Type = {
     sizeof(classmethod),
     0,
     (destructor)cm_dealloc,                     /* tp_dealloc */
-    0,                                          /* tp_print */
+    0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    0,                                          /* tp_reserved */
+    0,                                          /* tp_as_async */
     0,                                          /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
@@ -981,10 +1016,10 @@ PyTypeObject PyStaticMethod_Type = {
     sizeof(staticmethod),
     0,
     (destructor)sm_dealloc,                     /* tp_dealloc */
-    0,                                          /* tp_print */
+    0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    0,                                          /* tp_reserved */
+    0,                                          /* tp_as_async */
     0,                                          /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */

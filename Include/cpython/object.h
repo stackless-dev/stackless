@@ -59,6 +59,9 @@ typedef struct bufferinfo {
 typedef int (*getbufferproc)(PyObject *, Py_buffer *, int);
 typedef void (*releasebufferproc)(PyObject *, Py_buffer *);
 
+typedef PyObject *(*vectorcallfunc)(PyObject *callable, PyObject *const *args,
+                                    size_t nargsf, PyObject *kwnames);
+
 /* Maximum number of dimensions */
 #define PyBUF_MAX_NDIM 64
 
@@ -186,12 +189,9 @@ typedef struct {
      releasebufferproc bf_releasebuffer;
 } PyBufferProcs;
 
-/* We can't provide a full compile-time check that limited-API
-   users won't implement tp_print. However, not defining printfunc
-   and making tp_print of a different function pointer type
-   if Py_LIMITED_API is set should at least cause a warning
-   in most cases. */
-typedef int (*printfunc)(PyObject *, FILE *, int);
+/* Allow printfunc in the tp_vectorcall_offset slot for
+ * backwards-compatibility */
+typedef Py_ssize_t printfunc;
 
 typedef struct _typeobject {
     PyObject_VAR_HEAD
@@ -201,7 +201,7 @@ typedef struct _typeobject {
     /* Methods to implement standard operations */
 
     destructor tp_dealloc;
-    printfunc tp_print;
+    Py_ssize_t tp_vectorcall_offset;
     getattrfunc tp_getattr;
     setattrfunc tp_setattr;
     PyAsyncMethods *tp_as_async; /* formerly known as tp_compare (Python 2)
@@ -273,6 +273,10 @@ typedef struct _typeobject {
     unsigned int tp_version_tag;
 
     destructor tp_finalize;
+    vectorcallfunc tp_vectorcall;
+
+    /* bpo-37250: kept for backwards compatibility in CPython 3.8 only */
+    Py_DEPRECATED(3.8) int (*tp_print)(PyObject *, FILE *, int);
 
 #ifdef COUNT_ALLOCS
     /* these must be last and never explicitly initialized */

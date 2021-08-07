@@ -14,6 +14,21 @@ What's New in Stackless 3.X.X?
   Stackless can't fully support all use-cases. Currently the hook can be used
   by a debugger (i.e. pydevd) to modify the Python byte-code.
 
+- https://github.com/stackless-dev/stackless/issues/297
+  Stackless now works on Linux ARM64 (architecture "aarch64").
+
+- https://github.com/stackless-dev/stackless/issues/296
+  It is now possible to cross-compile Stackless for Windows on ARM and ARM64.
+
+- https://github.com/stackless-dev/stackless/issues/295
+  Add prefix "_slp" to structure names without a prefix. The following structs
+  were renamed: _channel, _cframe, _tasklet, _unwindobject and _bomb.
+
+- https://github.com/stackless-dev/stackless/issues/290
+  The newly added PEP-590 Vectorcall protocol (bpo-36974) requires changes to
+  the Stackless protocol. The new mcros STACKLESS_VECTORCALL_xxx() must be used
+  to add soft-switching to vectorcall functions.
+
 - https://github.com/stackless-dev/stackless/issues/278
   Stackless now uses Stackman https://github.com/stackless-dev/stackman for
   stack switching / hard tasklet switching. The legacy stack switching code

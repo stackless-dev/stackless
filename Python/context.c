@@ -683,7 +683,7 @@ context_run(PyContext *self, PyObject *const *args,
 #endif
     STACKLESS_PROMOTE_ALL();
 
-    PyObject *call_result = _PyObject_FastCallKeywords(
+    PyObject *call_result = _PyObject_Vectorcall(
         args[0], args + 1, nargs - 1, kwnames);
 
     STACKLESS_ASSERT();

@@ -470,7 +470,12 @@ sends logging output to a network socket. The base class uses a TCP socket.
    .. method:: makePickle(record)
 
       Pickles the record's attribute dictionary in binary format with a length
-      prefix, and returns it ready for transmission across the socket.
+      prefix, and returns it ready for transmission across the socket. The
+      details of this operation are equivalent to::
+
+          data = pickle.dumps(record_attr_dict, 1)
+          datalen = struct.pack('>L', len(data))
+          return datalen + data
 
       Note that pickles aren't completely secure. If you are concerned about
       security, you may want to override this method to implement a more secure
@@ -481,8 +486,12 @@ sends logging output to a network socket. The base class uses a TCP socket.
 
    .. method:: send(packet)
 
-      Send a pickled string *packet* to the socket. This function allows for
-      partial sends which can happen when the network is busy.
+      Send a pickled byte-string *packet* to the socket. The format of the sent
+      byte-string is as described in the documentation for
+      :meth:`~SocketHandler.makePickle`.
+
+      This function allows for partial sends, which can happen when the network
+      is busy.
 
 
    .. method:: createSocket()
@@ -543,7 +552,8 @@ over UDP sockets.
 
    .. method:: send(s)
 
-      Send a pickled string to a socket.
+      Send a pickled byte-string to a socket. The format of the sent byte-string
+      is as described in the documentation for :meth:`SocketHandler.makePickle`.
 
 
 .. _syslog-handler:
@@ -830,7 +840,8 @@ should, then :meth:`flush` is expected to do the flushing.
 
 .. class:: BufferingHandler(capacity)
 
-   Initializes the handler with a buffer of the specified capacity.
+   Initializes the handler with a buffer of the specified capacity. Here,
+   *capacity* means the number of logging records buffered.
 
 
    .. method:: emit(record)
@@ -854,12 +865,13 @@ should, then :meth:`flush` is expected to do the flushing.
 .. class:: MemoryHandler(capacity, flushLevel=ERROR, target=None, flushOnClose=True)
 
    Returns a new instance of the :class:`MemoryHandler` class. The instance is
-   initialized with a buffer size of *capacity*. If *flushLevel* is not specified,
-   :const:`ERROR` is used. If no *target* is specified, the target will need to be
-   set using :meth:`setTarget` before this handler does anything useful. If
-   *flushOnClose* is specified as ``False``, then the buffer is *not* flushed when
-   the handler is closed. If not specified or specified as ``True``, the previous
-   behaviour of flushing the buffer will occur when the handler is closed.
+   initialized with a buffer size of *capacity* (number of records buffered).
+   If *flushLevel* is not specified, :const:`ERROR` is used. If no *target* is
+   specified, the target will need to be set using :meth:`setTarget` before this
+   handler does anything useful. If *flushOnClose* is specified as ``False``,
+   then the buffer is *not* flushed when the handler is closed. If not specified
+   or specified as ``True``, the previous behaviour of flushing the buffer will
+   occur when the handler is closed.
 
    .. versionchanged:: 3.6
       The *flushOnClose* parameter was added.
@@ -959,14 +971,21 @@ possible, while any potentially slow operations (such as sending an email via
 .. class:: QueueHandler(queue)
 
    Returns a new instance of the :class:`QueueHandler` class. The instance is
-   initialized with the queue to send messages to. The queue can be any
-   queue-like object; it's used as-is by the :meth:`enqueue` method, which needs
-   to know how to send messages to it.
+   initialized with the queue to send messages to. The *queue* can be any
+   queue-like object; it's used as-is by the :meth:`enqueue` method, which
+   needs to know how to send messages to it. The queue is not *required* to
+   have the task tracking API, which means that you can use
+   :class:`~queue.SimpleQueue` instances for *queue*.
 
 
    .. method:: emit(record)
 
-      Enqueues the result of preparing the LogRecord.
+      Enqueues the result of preparing the LogRecord. Should an exception
+      occur (e.g. because a bounded queue has filled up), the
+      :meth:`~logging.Handler.handleError` method is called to handle the
+      error. This can result in the record silently being dropped (if
+      :attr:`logging.raiseExceptions` is ``False``) or a message printed to
+      ``sys.stderr`` (if :attr:`logging.raiseExceptions` is ``True``).
 
    .. method:: prepare(record)
 
@@ -1017,14 +1036,17 @@ possible, while any potentially slow operations (such as sending an email via
    initialized with the queue to send messages to and a list of handlers which
    will handle entries placed on the queue. The queue can be any queue-like
    object; it's passed as-is to the :meth:`dequeue` method, which needs
-   to know how to get messages from it. If ``respect_handler_level`` is ``True``,
-   a handler's level is respected (compared with the level for the message) when
-   deciding whether to pass messages to that handler; otherwise, the behaviour
-   is as in previous Python versions - to always pass each message to each
-   handler.
+   to know how to get messages from it. The queue is not *required* to have the
+   task tracking API (though it's used if available), which means that you can
+   use :class:`~queue.SimpleQueue` instances for *queue*.
+
+   If ``respect_handler_level`` is ``True``, a handler's level is respected
+   (compared with the level for the message) when deciding whether to pass
+   messages to that handler; otherwise, the behaviour is as in previous Python
+   versions - to always pass each message to each handler.
 
    .. versionchanged:: 3.5
-      The ``respect_handler_levels`` argument was added.
+      The ``respect_handler_level`` argument was added.
 
    .. method:: dequeue(block)
 

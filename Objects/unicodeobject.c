@@ -40,8 +40,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #define PY_SSIZE_T_CLEAN
 #include "Python.h"
+#include "pycore_initconfig.h"
 #include "pycore_fileutils.h"
 #include "pycore_object.h"
+#include "pycore_pylifecycle.h"
 #include "pycore_pystate.h"
 #include "ucnhash.h"
 #include "bytes_methods.h"
@@ -263,6 +265,13 @@ unicode_fill(enum PyUnicode_Kind kind, void *data, Py_UCS4 value,
 /* Forward declaration */
 static inline int
 _PyUnicodeWriter_WriteCharInline(_PyUnicodeWriter *writer, Py_UCS4 ch);
+static PyObject *
+unicode_encode_utf8(PyObject *unicode, _Py_error_handler error_handler,
+                    const char *errors);
+static PyObject *
+unicode_decode_utf8(const char *s, Py_ssize_t size,
+                    _Py_error_handler error_handler, const char *errors,
+                    Py_ssize_t *consumed);
 
 /* List of static strings. */
 static _Py_Identifier *static_strings = NULL;
@@ -387,6 +396,35 @@ _Py_GetErrorHandler(const char *errors)
     return _Py_ERROR_OTHER;
 }
 
+
+static _Py_error_handler
+get_error_handler_wide(const wchar_t *errors)
+{
+    if (errors == NULL || wcscmp(errors, L"strict") == 0) {
+        return _Py_ERROR_STRICT;
+    }
+    if (wcscmp(errors, L"surrogateescape") == 0) {
+        return _Py_ERROR_SURROGATEESCAPE;
+    }
+    if (wcscmp(errors, L"replace") == 0) {
+        return _Py_ERROR_REPLACE;
+    }
+    if (wcscmp(errors, L"ignore") == 0) {
+        return _Py_ERROR_IGNORE;
+    }
+    if (wcscmp(errors, L"backslashreplace") == 0) {
+        return _Py_ERROR_BACKSLASHREPLACE;
+    }
+    if (wcscmp(errors, L"surrogatepass") == 0) {
+        return _Py_ERROR_SURROGATEPASS;
+    }
+    if (wcscmp(errors, L"xmlcharrefreplace") == 0) {
+        return _Py_ERROR_XMLCHARREFREPLACE;
+    }
+    return _Py_ERROR_OTHER;
+}
+
+
 /* The max unicode value is always 0x10FFFF while using the PEP-393 API.
    This function is kept for backward compatibility with the old API. */
 Py_UNICODE
@@ -418,10 +456,14 @@ _PyUnicode_CheckConsistency(PyObject *op, int check_content)
     }
     else {
         PyCompactUnicodeObject *compact = (PyCompactUnicodeObject *)op;
+#ifndef NDEBUG
         void *data;
+#endif
 
         if (ascii->state.compact == 1) {
+#ifndef NDEBUG
             data = compact + 1;
+#endif
             _PyObject_ASSERT(op, kind == PyUnicode_1BYTE_KIND
                                  || kind == PyUnicode_2BYTE_KIND
                                  || kind == PyUnicode_4BYTE_KIND);
@@ -430,9 +472,11 @@ _PyUnicode_CheckConsistency(PyObject *op, int check_content)
             _PyObject_ASSERT(op, compact->utf8 != data);
         }
         else {
+#ifndef NDEBUG
             PyUnicodeObject *unicode = (PyUnicodeObject *)op;
 
             data = unicode->data.any;
+#endif
             if (kind == PyUnicode_WCHAR_KIND) {
                 _PyObject_ASSERT(op, ascii->length == 0);
                 _PyObject_ASSERT(op, ascii->hash == -1);
@@ -1213,7 +1257,7 @@ void *_PyUnicode_compact_data(void *unicode_raw) {
 }
 void *_PyUnicode_data(void *unicode_raw) {
     PyObject *unicode = _PyObject_CAST(unicode_raw);
-    printf("obj %p\n", unicode);
+    printf("obj %p\n", (void*)unicode);
     printf("compact %d\n", PyUnicode_IS_COMPACT(unicode));
     printf("compact ascii %d\n", PyUnicode_IS_COMPACT_ASCII(unicode));
     printf("ascii op %p\n", ((void*)((PyASCIIObject*)(unicode) + 1)));
@@ -1244,14 +1288,14 @@ _PyUnicode_Dump(PyObject *op)
 
     if (ascii->wstr == data)
         printf("shared ");
-    printf("wstr=%p", ascii->wstr);
+    printf("wstr=%p", (void *)ascii->wstr);
 
     if (!(ascii->state.ascii == 1 && ascii->state.compact == 1)) {
         printf(" (%" PY_FORMAT_SIZE_T "u), ", compact->wstr_length);
         if (!ascii->state.compact && compact->utf8 == unicode->data.any)
             printf("shared ");
         printf("utf8=%p (%" PY_FORMAT_SIZE_T "u)",
-               compact->utf8, compact->utf8_length);
+               (void *)compact->utf8, compact->utf8_length);
     }
     printf(", data=%p\n", data);
 }
@@ -3444,11 +3488,9 @@ PyUnicode_AsEncodedObject(PyObject *unicode,
 
 
 static PyObject *
-unicode_encode_locale(PyObject *unicode, const char *errors,
+unicode_encode_locale(PyObject *unicode, _Py_error_handler error_handler,
                       int current_locale)
 {
-    _Py_error_handler error_handler = _Py_GetErrorHandler(errors);
-
     Py_ssize_t wlen;
     wchar_t *wstr = PyUnicode_AsWideCharString(unicode, &wlen);
     if (wstr == NULL) {
@@ -3498,30 +3540,44 @@ unicode_encode_locale(PyObject *unicode, const char *errors,
 PyObject *
 PyUnicode_EncodeLocale(PyObject *unicode, const char *errors)
 {
-    return unicode_encode_locale(unicode, errors, 1);
+    _Py_error_handler error_handler = _Py_GetErrorHandler(errors);
+    return unicode_encode_locale(unicode, error_handler, 1);
 }
 
 PyObject *
 PyUnicode_EncodeFSDefault(PyObject *unicode)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET_UNSAFE();
-    const _PyCoreConfig *config = &interp->core_config;
-#if defined(__APPLE__)
-    return _PyUnicode_AsUTF8String(unicode, config->filesystem_errors);
+#ifdef _Py_FORCE_UTF8_FS_ENCODING
+    if (interp->fs_codec.encoding) {
+        return unicode_encode_utf8(unicode,
+                                   interp->fs_codec.error_handler,
+                                   interp->fs_codec.errors);
+    }
+    else {
+        const wchar_t *filesystem_errors = interp->config.filesystem_errors;
+        _Py_error_handler errors;
+        errors = get_error_handler_wide(filesystem_errors);
+        assert(errors != _Py_ERROR_UNKNOWN);
+        return unicode_encode_utf8(unicode, errors, NULL);
+    }
 #else
     /* Bootstrap check: if the filesystem codec is implemented in Python, we
        cannot use it to encode and decode filenames before it is loaded. Load
        the Python codec requires to encode at least its own filename. Use the C
        implementation of the locale codec until the codec registry is
        initialized and the Python codec is loaded. See initfsencoding(). */
-    if (interp->fscodec_initialized) {
+    if (interp->fs_codec.encoding) {
         return PyUnicode_AsEncodedString(unicode,
-                                         config->filesystem_encoding,
-                                         config->filesystem_errors);
+                                         interp->fs_codec.encoding,
+                                         interp->fs_codec.errors);
     }
     else {
-        return unicode_encode_locale(unicode,
-                                     config->filesystem_errors, 0);
+        const wchar_t *filesystem_errors = interp->config.filesystem_errors;
+        _Py_error_handler errors;
+        errors = get_error_handler_wide(filesystem_errors);
+        assert(errors != _Py_ERROR_UNKNOWN);
+        return unicode_encode_locale(unicode, errors, 0);
     }
 #endif
 }
@@ -3662,11 +3718,9 @@ PyUnicode_AsEncodedUnicode(PyObject *unicode,
 }
 
 static PyObject*
-unicode_decode_locale(const char *str, Py_ssize_t len, const char *errors,
-                      int current_locale)
+unicode_decode_locale(const char *str, Py_ssize_t len,
+                      _Py_error_handler errors, int current_locale)
 {
-    _Py_error_handler error_handler = _Py_GetErrorHandler(errors);
-
     if (str[len] != '\0' || (size_t)len != strlen(str))  {
         PyErr_SetString(PyExc_ValueError, "embedded null byte");
         return NULL;
@@ -3676,7 +3730,7 @@ unicode_decode_locale(const char *str, Py_ssize_t len, const char *errors,
     size_t wlen;
     const char *reason;
     int res = _Py_DecodeLocaleEx(str, &wstr, &wlen, &reason,
-                                 current_locale, error_handler);
+                                 current_locale, errors);
     if (res != 0) {
         if (res == -2) {
             PyObject *exc;
@@ -3708,14 +3762,16 @@ PyObject*
 PyUnicode_DecodeLocaleAndSize(const char *str, Py_ssize_t len,
                               const char *errors)
 {
-    return unicode_decode_locale(str, len, errors, 1);
+    _Py_error_handler error_handler = _Py_GetErrorHandler(errors);
+    return unicode_decode_locale(str, len, error_handler, 1);
 }
 
 PyObject*
 PyUnicode_DecodeLocale(const char *str, const char *errors)
 {
     Py_ssize_t size = (Py_ssize_t)strlen(str);
-    return unicode_decode_locale(str, size, errors, 1);
+    _Py_error_handler error_handler = _Py_GetErrorHandler(errors);
+    return unicode_decode_locale(str, size, error_handler, 1);
 }
 
 
@@ -3729,23 +3785,36 @@ PyObject*
 PyUnicode_DecodeFSDefaultAndSize(const char *s, Py_ssize_t size)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET_UNSAFE();
-    const _PyCoreConfig *config = &interp->core_config;
-#if defined(__APPLE__)
-    return PyUnicode_DecodeUTF8Stateful(s, size, config->filesystem_errors, NULL);
+#ifdef _Py_FORCE_UTF8_FS_ENCODING
+    if (interp->fs_codec.encoding) {
+        return unicode_decode_utf8(s, size,
+                                   interp->fs_codec.error_handler,
+                                   interp->fs_codec.errors,
+                                   NULL);
+    }
+    else {
+        const wchar_t *filesystem_errors = interp->config.filesystem_errors;
+        _Py_error_handler errors;
+        errors = get_error_handler_wide(filesystem_errors);
+        assert(errors != _Py_ERROR_UNKNOWN);
+        return unicode_decode_utf8(s, size, errors, NULL, NULL);
+    }
 #else
     /* Bootstrap check: if the filesystem codec is implemented in Python, we
        cannot use it to encode and decode filenames before it is loaded. Load
        the Python codec requires to encode at least its own filename. Use the C
        implementation of the locale codec until the codec registry is
        initialized and the Python codec is loaded. See initfsencoding(). */
-    if (interp->fscodec_initialized) {
+    if (interp->fs_codec.encoding) {
         return PyUnicode_Decode(s, size,
-                                config->filesystem_encoding,
-                                config->filesystem_errors);
+                                interp->fs_codec.encoding,
+                                interp->fs_codec.errors);
     }
     else {
-        return unicode_decode_locale(s, size,
-                                     config->filesystem_errors, 0);
+        const wchar_t *filesystem_errors = interp->config.filesystem_errors;
+        _Py_error_handler errors;
+        errors = get_error_handler_wide(filesystem_errors);
+        return unicode_decode_locale(s, size, errors, 0);
     }
 #endif
 }
@@ -4809,11 +4878,10 @@ ascii_decode(const char *start, const char *end, Py_UCS1 *dest)
     return p - start;
 }
 
-PyObject *
-PyUnicode_DecodeUTF8Stateful(const char *s,
-                             Py_ssize_t size,
-                             const char *errors,
-                             Py_ssize_t *consumed)
+static PyObject *
+unicode_decode_utf8(const char *s, Py_ssize_t size,
+                    _Py_error_handler error_handler, const char *errors,
+                    Py_ssize_t *consumed)
 {
     _PyUnicodeWriter writer;
     const char *starts = s;
@@ -4824,7 +4892,6 @@ PyUnicode_DecodeUTF8Stateful(const char *s,
     const char *errmsg = "";
     PyObject *error_handler_obj = NULL;
     PyObject *exc = NULL;
-    _Py_error_handler error_handler = _Py_ERROR_UNKNOWN;
 
     if (size == 0) {
         if (consumed)
@@ -4876,11 +4943,15 @@ PyUnicode_DecodeUTF8Stateful(const char *s,
             endinpos = startinpos + 1;
             break;
         case 2:
-        case 3:
-        case 4:
-            if (s == end || consumed) {
+            if (consumed && (unsigned char)s[0] == 0xED && end - s == 2
+                && (unsigned char)s[1] >= 0xA0 && (unsigned char)s[1] <= 0xBF)
+            {
+                /* Truncated surrogate code in range D800-DFFF */
                 goto End;
             }
+            /* fall through */
+        case 3:
+        case 4:
             errmsg = "invalid continuation byte";
             startinpos = s - starts;
             endinpos = startinpos + ch - 1;
@@ -4944,6 +5015,16 @@ onError:
     Py_XDECREF(exc);
     _PyUnicodeWriter_Dealloc(&writer);
     return NULL;
+}
+
+
+PyObject *
+PyUnicode_DecodeUTF8Stateful(const char *s,
+                             Py_ssize_t size,
+                             const char *errors,
+                             Py_ssize_t *consumed)
+{
+    return unicode_decode_utf8(s, size, _Py_ERROR_UNKNOWN, errors, consumed);
 }
 
 
@@ -5230,8 +5311,9 @@ _Py_EncodeUTF8Ex(const wchar_t *text, char **str, size_t *error_pos,
    maximum possible needed (4 result bytes per Unicode character), and return
    the excess memory at the end.
 */
-PyObject *
-_PyUnicode_AsUTF8String(PyObject *unicode, const char *errors)
+static PyObject *
+unicode_encode_utf8(PyObject *unicode, _Py_error_handler error_handler,
+                    const char *errors)
 {
     enum PyUnicode_Kind kind;
     void *data;
@@ -5259,13 +5341,20 @@ _PyUnicode_AsUTF8String(PyObject *unicode, const char *errors)
     case PyUnicode_1BYTE_KIND:
         /* the string cannot be ASCII, or PyUnicode_UTF8() would be set */
         assert(!PyUnicode_IS_ASCII(unicode));
-        return ucs1lib_utf8_encoder(unicode, data, size, errors);
+        return ucs1lib_utf8_encoder(unicode, data, size, error_handler, errors);
     case PyUnicode_2BYTE_KIND:
-        return ucs2lib_utf8_encoder(unicode, data, size, errors);
+        return ucs2lib_utf8_encoder(unicode, data, size, error_handler, errors);
     case PyUnicode_4BYTE_KIND:
-        return ucs4lib_utf8_encoder(unicode, data, size, errors);
+        return ucs4lib_utf8_encoder(unicode, data, size, error_handler, errors);
     }
 }
+
+PyObject *
+_PyUnicode_AsUTF8String(PyObject *unicode, const char *errors)
+{
+    return unicode_encode_utf8(unicode, _Py_ERROR_UNKNOWN, errors);
+}
+
 
 PyObject *
 PyUnicode_EncodeUTF8(const Py_UNICODE *s,
@@ -7035,6 +7124,12 @@ PyUnicode_AsASCIIString(PyObject *unicode)
 #define NEED_RETRY
 #endif
 
+/* INT_MAX is the theoretical largest chunk (or INT_MAX / 2 when
+   transcoding from UTF-16), but INT_MAX / 4 perfoms better in
+   both cases also and avoids partial characters overrunning the
+   length limit in MultiByteToWideChar on Windows */
+#define DECODING_CHUNK_SIZE (INT_MAX/4)
+
 #ifndef WC_ERR_INVALID_CHARS
 #  define WC_ERR_INVALID_CHARS 0x0080
 #endif
@@ -7271,8 +7366,8 @@ decode_code_page_stateful(int code_page,
     do
     {
 #ifdef NEED_RETRY
-        if (size > INT_MAX) {
-            chunk_size = INT_MAX;
+        if (size > DECODING_CHUNK_SIZE) {
+            chunk_size = DECODING_CHUNK_SIZE;
             final = 0;
             done = 0;
         }
@@ -7676,10 +7771,8 @@ encode_code_page(int code_page,
     do
     {
 #ifdef NEED_RETRY
-        /* UTF-16 encoding may double the size, so use only INT_MAX/2
-           chunks. */
-        if (len > INT_MAX/2) {
-            chunk_len = INT_MAX/2;
+        if (len > DECODING_CHUNK_SIZE) {
+            chunk_len = DECODING_CHUNK_SIZE;
             done = 0;
         }
         else
@@ -8020,23 +8113,17 @@ static PyMethodDef encoding_map_methods[] = {
     { 0 }
 };
 
-static void
-encoding_map_dealloc(PyObject* o)
-{
-    PyObject_FREE(o);
-}
-
 static PyTypeObject EncodingMapType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "EncodingMap",          /*tp_name*/
     sizeof(struct encoding_map),   /*tp_basicsize*/
     0,                      /*tp_itemsize*/
     /* methods */
-    encoding_map_dealloc,   /*tp_dealloc*/
-    0,                      /*tp_print*/
+    0,                      /*tp_dealloc*/
+    0,                      /*tp_vectorcall_offset*/
     0,                      /*tp_getattr*/
     0,                      /*tp_setattr*/
-    0,                      /*tp_reserved*/
+    0,                      /*tp_as_async*/
     0,                      /*tp_repr*/
     0,                      /*tp_as_number*/
     0,                      /*tp_as_sequence*/
@@ -12368,7 +12455,7 @@ do_strip(PyObject *self, int striptype)
 static PyObject *
 do_argstrip(PyObject *self, int striptype, PyObject *sep)
 {
-    if (sep != NULL && sep != Py_None) {
+    if (sep != Py_None) {
         if (PyUnicode_Check(sep))
             return _PyUnicode_XStrip(self, striptype, sep);
         else {
@@ -12405,7 +12492,7 @@ unicode_strip_impl(PyObject *self, PyObject *chars)
 /*[clinic input]
 str.lstrip as unicode_lstrip
 
-    chars: object = NULL
+    chars: object = None
     /
 
 Return a copy of the string with leading whitespace removed.
@@ -12415,7 +12502,7 @@ If chars is given and not None, remove characters in chars instead.
 
 static PyObject *
 unicode_lstrip_impl(PyObject *self, PyObject *chars)
-/*[clinic end generated code: output=3b43683251f79ca7 input=9e56f3c45f5ff4c3]*/
+/*[clinic end generated code: output=3b43683251f79ca7 input=529f9f3834448671]*/
 {
     return do_argstrip(self, LEFTSTRIP, chars);
 }
@@ -12424,7 +12511,7 @@ unicode_lstrip_impl(PyObject *self, PyObject *chars)
 /*[clinic input]
 str.rstrip as unicode_rstrip
 
-    chars: object = NULL
+    chars: object = None
     /
 
 Return a copy of the string with trailing whitespace removed.
@@ -12434,7 +12521,7 @@ If chars is given and not None, remove characters in chars instead.
 
 static PyObject *
 unicode_rstrip_impl(PyObject *self, PyObject *chars)
-/*[clinic end generated code: output=4a59230017cc3b7a input=ac89d0219cb411ee]*/
+/*[clinic end generated code: output=4a59230017cc3b7a input=62566c627916557f]*/
 {
     return do_argstrip(self, RIGHTSTRIP, chars);
 }
@@ -13912,7 +13999,8 @@ unicode_subscript(PyObject* self, PyObject* item)
             i += PyUnicode_GET_LENGTH(self);
         return unicode_getitem(self, i);
     } else if (PySlice_Check(item)) {
-        Py_ssize_t start, stop, step, slicelength, cur, i;
+        Py_ssize_t start, stop, step, slicelength, i;
+        size_t cur;
         PyObject *result;
         void *src_data, *dest_data;
         int src_kind, dest_kind;
@@ -15081,10 +15169,10 @@ PyTypeObject PyUnicode_Type = {
     0,                            /* tp_itemsize */
     /* Slots */
     (destructor)unicode_dealloc,  /* tp_dealloc */
-    0,                            /* tp_print */
+    0,                            /* tp_vectorcall_offset */
     0,                            /* tp_getattr */
     0,                            /* tp_setattr */
-    0,                            /* tp_reserved */
+    0,                            /* tp_as_async */
     unicode_repr,                 /* tp_repr */
     &unicode_as_number,           /* tp_as_number */
     &unicode_as_sequence,         /* tp_as_sequence */
@@ -15120,7 +15208,7 @@ PyTypeObject PyUnicode_Type = {
 
 /* Initialize the Unicode implementation */
 
-_PyInitError
+PyStatus
 _PyUnicode_Init(void)
 {
     /* XXX - move this array to unicodectype.c ? */
@@ -15138,12 +15226,12 @@ _PyUnicode_Init(void)
     /* Init the implementation */
     _Py_INCREF_UNICODE_EMPTY();
     if (!unicode_empty) {
-        return _Py_INIT_ERR("Can't create empty string");
+        return _PyStatus_ERR("Can't create empty string");
     }
     Py_DECREF(unicode_empty);
 
     if (PyType_Ready(&PyUnicode_Type) < 0) {
-        return _Py_INIT_ERR("Can't initialize unicode type");
+        return _PyStatus_ERR("Can't initialize unicode type");
     }
 
     /* initialize the linebreak bloom filter */
@@ -15152,15 +15240,15 @@ _PyUnicode_Init(void)
         Py_ARRAY_LENGTH(linebreak));
 
     if (PyType_Ready(&EncodingMapType) < 0) {
-         return _Py_INIT_ERR("Can't initialize encoding map type");
+         return _PyStatus_ERR("Can't initialize encoding map type");
     }
     if (PyType_Ready(&PyFieldNameIter_Type) < 0) {
-        return _Py_INIT_ERR("Can't initialize field name iterator type");
+        return _PyStatus_ERR("Can't initialize field name iterator type");
     }
     if (PyType_Ready(&PyFormatterIter_Type) < 0) {
-        return _Py_INIT_ERR("Can't initialize formatter iter type");
+        return _PyStatus_ERR("Can't initialize formatter iter type");
     }
-    return _Py_INIT_OK();
+    return _PyStatus_OK();
 }
 
 /* Finalize the Unicode implementation */
@@ -15409,10 +15497,10 @@ PyTypeObject PyUnicodeIter_Type = {
     0,                  /* tp_itemsize */
     /* methods */
     (destructor)unicodeiter_dealloc,    /* tp_dealloc */
-    0,                  /* tp_print */
+    0,                  /* tp_vectorcall_offset */
     0,                  /* tp_getattr */
     0,                  /* tp_setattr */
-    0,                  /* tp_reserved */
+    0,                  /* tp_as_async */
     0,                  /* tp_repr */
     0,                  /* tp_as_number */
     0,                  /* tp_as_sequence */
@@ -15574,6 +15662,191 @@ PyUnicode_AsUnicodeCopy(PyObject *unicode)
 }
 
 
+static int
+encode_wstr_utf8(wchar_t *wstr, char **str, const char *name)
+{
+    int res;
+    res = _Py_EncodeUTF8Ex(wstr, str, NULL, NULL, 1, _Py_ERROR_STRICT);
+    if (res == -2) {
+        PyErr_Format(PyExc_RuntimeWarning, "cannot decode %s", name);
+        return -1;
+    }
+    if (res < 0) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    return 0;
+}
+
+
+static int
+config_get_codec_name(wchar_t **config_encoding)
+{
+    char *encoding;
+    if (encode_wstr_utf8(*config_encoding, &encoding, "stdio_encoding") < 0) {
+        return -1;
+    }
+
+    PyObject *name_obj = NULL;
+    PyObject *codec = _PyCodec_Lookup(encoding);
+    PyMem_RawFree(encoding);
+
+    if (!codec)
+        goto error;
+
+    name_obj = PyObject_GetAttrString(codec, "name");
+    Py_CLEAR(codec);
+    if (!name_obj) {
+        goto error;
+    }
+
+    wchar_t *wname = PyUnicode_AsWideCharString(name_obj, NULL);
+    Py_DECREF(name_obj);
+    if (wname == NULL) {
+        goto error;
+    }
+
+    wchar_t *raw_wname = _PyMem_RawWcsdup(wname);
+    if (raw_wname == NULL) {
+        PyMem_Free(wname);
+        PyErr_NoMemory();
+        goto error;
+    }
+
+    PyMem_RawFree(*config_encoding);
+    *config_encoding = raw_wname;
+
+    PyMem_Free(wname);
+    return 0;
+
+error:
+    Py_XDECREF(codec);
+    Py_XDECREF(name_obj);
+    return -1;
+}
+
+
+static PyStatus
+init_stdio_encoding(PyThreadState *tstate)
+{
+    /* Update the stdio encoding to the normalized Python codec name. */
+    PyConfig *config = &tstate->interp->config;
+    if (config_get_codec_name(&config->stdio_encoding) < 0) {
+        return _PyStatus_ERR("failed to get the Python codec name "
+                             "of the stdio encoding");
+    }
+    return _PyStatus_OK();
+}
+
+
+static int
+init_fs_codec(PyInterpreterState *interp)
+{
+    PyConfig *config = &interp->config;
+
+    _Py_error_handler error_handler;
+    error_handler = get_error_handler_wide(config->filesystem_errors);
+    if (error_handler == _Py_ERROR_UNKNOWN) {
+        PyErr_SetString(PyExc_RuntimeError, "unknow filesystem error handler");
+        return -1;
+    }
+
+    char *encoding, *errors;
+    if (encode_wstr_utf8(config->filesystem_encoding,
+                         &encoding,
+                         "filesystem_encoding") < 0) {
+        return -1;
+    }
+
+    if (encode_wstr_utf8(config->filesystem_errors,
+                         &errors,
+                         "filesystem_errors") < 0) {
+        PyMem_RawFree(encoding);
+        return -1;
+    }
+
+    PyMem_RawFree(interp->fs_codec.encoding);
+    interp->fs_codec.encoding = encoding;
+    PyMem_RawFree(interp->fs_codec.errors);
+    interp->fs_codec.errors = errors;
+    interp->fs_codec.error_handler = error_handler;
+
+    /* At this point, PyUnicode_EncodeFSDefault() and
+       PyUnicode_DecodeFSDefault() can now use the Python codec rather than
+       the C implementation of the filesystem encoding. */
+
+    /* Set Py_FileSystemDefaultEncoding and Py_FileSystemDefaultEncodeErrors
+       global configuration variables. */
+    if (_Py_SetFileSystemEncoding(interp->fs_codec.encoding,
+                                  interp->fs_codec.errors) < 0) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    return 0;
+}
+
+
+static PyStatus
+init_fs_encoding(PyThreadState *tstate)
+{
+    PyInterpreterState *interp = tstate->interp;
+
+    /* Update the filesystem encoding to the normalized Python codec name.
+       For example, replace "ANSI_X3.4-1968" (locale encoding) with "ascii"
+       (Python codec name). */
+    PyConfig *config = &interp->config;
+    if (config_get_codec_name(&config->filesystem_encoding) < 0) {
+        _Py_DumpPathConfig(tstate);
+        return _PyStatus_ERR("failed to get the Python codec "
+                             "of the filesystem encoding");
+    }
+
+    if (init_fs_codec(interp) < 0) {
+        return _PyStatus_ERR("cannot initialize filesystem codec");
+    }
+    return _PyStatus_OK();
+}
+
+
+PyStatus
+_PyUnicode_InitEncodings(PyThreadState *tstate)
+{
+    PyStatus status = init_fs_encoding(tstate);
+    if (_PyStatus_EXCEPTION(status)) {
+        return status;
+    }
+
+    return init_stdio_encoding(tstate);
+}
+
+
+#ifdef MS_WINDOWS
+int
+_PyUnicode_EnableLegacyWindowsFSEncoding(void)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET_UNSAFE();
+    PyConfig *config = &interp->config;
+
+    /* Set the filesystem encoding to mbcs/replace (PEP 529) */
+    wchar_t *encoding = _PyMem_RawWcsdup(L"mbcs");
+    wchar_t *errors = _PyMem_RawWcsdup(L"replace");
+    if (encoding == NULL || errors == NULL) {
+        PyMem_RawFree(encoding);
+        PyMem_RawFree(errors);
+        PyErr_NoMemory();
+        return -1;
+    }
+
+    PyMem_RawFree(config->filesystem_encoding);
+    config->filesystem_encoding = encoding;
+    PyMem_RawFree(config->filesystem_errors);
+    config->filesystem_errors = errors;
+
+    return init_fs_codec(interp);
+}
+#endif
+
+
 void
 _PyUnicode_Fini(void)
 {
@@ -15597,6 +15870,12 @@ _PyUnicode_Fini(void)
     }
     _PyUnicode_ClearStaticStrings();
     (void)PyUnicode_ClearFreeList();
+
+    PyInterpreterState *interp = _PyInterpreterState_GET_UNSAFE();
+    PyMem_RawFree(interp->fs_codec.encoding);
+    interp->fs_codec.encoding = NULL;
+    PyMem_RawFree(interp->fs_codec.errors);
+    interp->fs_codec.errors = NULL;
 }
 
 

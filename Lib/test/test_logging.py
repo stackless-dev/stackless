@@ -668,10 +668,29 @@ class HandlerTest(BaseTest):
     # register_at_fork mechanism is also present and used.
     @unittest.skipIf(not hasattr(os, 'fork'), 'Test requires os.fork().')
     def test_post_fork_child_no_deadlock(self):
-        """Ensure forked child logging locks are not held; bpo-6721."""
-        refed_h = logging.Handler()
+        """Ensure child logging locks are not held; bpo-6721 & bpo-36533."""
+        class _OurHandler(logging.Handler):
+            def __init__(self):
+                super().__init__()
+                self.sub_handler = logging.StreamHandler(
+                    stream=open('/dev/null', 'wt'))
+
+            def emit(self, record):
+                self.sub_handler.acquire()
+                try:
+                    self.sub_handler.emit(record)
+                finally:
+                    self.sub_handler.release()
+
+        self.assertEqual(len(logging._handlers), 0)
+        refed_h = _OurHandler()
+        self.addCleanup(refed_h.sub_handler.stream.close)
         refed_h.name = 'because we need at least one for this test'
         self.assertGreater(len(logging._handlers), 0)
+        self.assertGreater(len(logging._at_fork_reinit_lock_weakset), 1)
+        test_logger = logging.getLogger('test_post_fork_child_no_deadlock')
+        test_logger.addHandler(refed_h)
+        test_logger.setLevel(logging.DEBUG)
 
         locks_held__ready_to_fork = threading.Event()
         fork_happened__release_locks_and_end_thread = threading.Event()
@@ -709,19 +728,24 @@ class HandlerTest(BaseTest):
         locks_held__ready_to_fork.wait()
         pid = os.fork()
         if pid == 0:  # Child.
-            logging.error(r'Child process did not deadlock. \o/')
-            os._exit(0)
+            try:
+                test_logger.info(r'Child process did not deadlock. \o/')
+            finally:
+                os._exit(0)
         else:  # Parent.
+            test_logger.info(r'Parent process returned from fork. \o/')
             fork_happened__release_locks_and_end_thread.set()
             lock_holder_thread.join()
             start_time = time.monotonic()
             while True:
+                test_logger.debug('Waiting for child process.')
                 waited_pid, status = os.waitpid(pid, os.WNOHANG)
                 if waited_pid == pid:
                     break  # child process exited.
                 if time.monotonic() - start_time > 7:
                     break  # so long? implies child deadlock.
                 time.sleep(0.05)
+            test_logger.debug('Done waiting.')
             if waited_pid != pid:
                 os.kill(pid, signal.SIGKILL)
                 waited_pid, status = os.waitpid(pid, 0)
@@ -736,6 +760,10 @@ class BadStream(object):
 class TestStreamHandler(logging.StreamHandler):
     def handleError(self, record):
         self.error_record = record
+
+class StreamWithIntName(object):
+    level = logging.NOTSET
+    name = 2
 
 class StreamHandlerTest(BaseTest):
     def test_error_handling(self):
@@ -773,6 +801,10 @@ class StreamHandlerTest(BaseTest):
         # test that setting to existing value returns None
         actual = h.setStream(old)
         self.assertIsNone(actual)
+
+    def test_can_represent_stream_with_int_name(self):
+        h = logging.StreamHandler(StreamWithIntName())
+        self.assertEqual(repr(h), '<StreamHandler 2 (NOTSET)>')
 
 # -- The following section could be moved into a server_helper.py module
 # -- if it proves to be of wider utility than just test_logging
@@ -3601,6 +3633,16 @@ if hasattr(logging.handlers, 'QueueListener'):
                                     [m.msg if isinstance(m, logging.LogRecord)
                                      else m for m in items]))
 
+        def test_calls_task_done_after_stop(self):
+            # Issue 36813: Make sure queue.join does not deadlock.
+            log_queue = queue.Queue()
+            listener = logging.handlers.QueueListener(log_queue)
+            listener.start()
+            listener.stop()
+            with self.assertRaises(ValueError):
+                # Make sure all tasks are done and .join won't block.
+                log_queue.task_done()
+
 
 ZERO = datetime.timedelta(0)
 
@@ -4130,6 +4172,37 @@ class ModuleLevelMiscTest(BaseTest):
         logging.setLoggerClass(logging.Logger)
         self.assertEqual(logging.getLoggerClass(), logging.Logger)
 
+    def test_subclass_logger_cache(self):
+        # bpo-37258
+        message = []
+
+        class MyLogger(logging.getLoggerClass()):
+            def __init__(self, name='MyLogger', level=logging.NOTSET):
+                super().__init__(name, level)
+                message.append('initialized')
+
+        logging.setLoggerClass(MyLogger)
+        logger = logging.getLogger('just_some_logger')
+        self.assertEqual(message, ['initialized'])
+        stream = io.StringIO()
+        h = logging.StreamHandler(stream)
+        logger.addHandler(h)
+        try:
+            logger.setLevel(logging.DEBUG)
+            logger.debug("hello")
+            self.assertEqual(stream.getvalue().strip(), "hello")
+
+            stream.truncate(0)
+            stream.seek(0)
+
+            logger.setLevel(logging.INFO)
+            logger.debug("hello")
+            self.assertEqual(stream.getvalue(), "")
+        finally:
+            logger.removeHandler(h)
+            h.close()
+            logging.setLoggerClass(logging.Logger)
+
     @support.requires_type_collecting
     def test_logging_at_shutdown(self):
         # Issue #20037
@@ -4242,7 +4315,7 @@ class BasicConfigTest(unittest.TestCase):
         logging._handlers.clear()
         logging._handlers.update(self.saved_handlers)
         logging._handlerList[:] = self.saved_handler_list
-        logging.root.level = self.original_logging_level
+        logging.root.setLevel(self.original_logging_level)
 
     def test_no_kwargs(self):
         logging.basicConfig()

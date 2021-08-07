@@ -29,7 +29,7 @@ set DOWNLOAD_URL=http://www.stackless.com/binaries/MSI/{version}/{arch}{releasen
 
 set D=%~dp0
 set PCBUILD=%D%..\..\PCbuild\
-if "%Py_OutDir%"=="" set Py_OutDir=%PCBUILD%
+if NOT DEFINED Py_OutDir set Py_OutDir=%PCBUILD%
 set EXTERNALS=%D%..\..\externals\windows-installer\
 
 set BUILDX86=

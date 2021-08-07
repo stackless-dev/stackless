@@ -659,9 +659,9 @@ def getfile(object):
         raise TypeError('{!r} is a built-in module'.format(object))
     if isclass(object):
         if hasattr(object, '__module__'):
-            object = sys.modules.get(object.__module__)
-            if getattr(object, '__file__', None):
-                return object.__file__
+            module = sys.modules.get(object.__module__)
+            if getattr(module, '__file__', None):
+                return module.__file__
         raise TypeError('{!r} is a built-in class'.format(object))
     if ismethod(object):
         object = object.__func__
@@ -1037,15 +1037,11 @@ def getargs(co):
 
     names = co.co_varnames
     nargs = co.co_argcount
-    nposonlyargs = co.co_posonlyargcount
     nkwargs = co.co_kwonlyargcount
-    nposargs = nargs + nposonlyargs
-    posonlyargs = list(names[:nposonlyargs])
-    args = list(names[nposonlyargs:nposonlyargs+nargs])
-    kwonlyargs = list(names[nposargs:nposargs+nkwargs])
+    args = list(names[:nargs])
+    kwonlyargs = list(names[nargs:nargs+nkwargs])
     step = 0
 
-    nargs += nposonlyargs
     nargs += nkwargs
     varargs = None
     if co.co_flags & CO_VARARGS:
@@ -1054,7 +1050,7 @@ def getargs(co):
     varkw = None
     if co.co_flags & CO_VARKEYWORDS:
         varkw = co.co_varnames[nargs]
-    return Arguments(posonlyargs + args + kwonlyargs, varargs, varkw)
+    return Arguments(args + kwonlyargs, varargs, varkw)
 
 ArgSpec = namedtuple('ArgSpec', 'args varargs keywords defaults')
 
@@ -1081,16 +1077,15 @@ def getargspec(func):
     warnings.warn("inspect.getargspec() is deprecated since Python 3.0, "
                   "use inspect.signature() or inspect.getfullargspec()",
                   DeprecationWarning, stacklevel=2)
-    args, varargs, varkw, defaults, posonlyargs, kwonlyargs, \
-    kwonlydefaults, ann = getfullargspec(func)
-    if posonlyargs or kwonlyargs or ann:
-        raise ValueError("Function has positional-only, keyword-only parameters"
-                         " or annotations, use getfullargspec() API which can"
-                         " support them")
+    args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, ann = \
+        getfullargspec(func)
+    if kwonlyargs or ann:
+        raise ValueError("Function has keyword-only parameters or annotations"
+                         ", use inspect.signature() API which can support them")
     return ArgSpec(args, varargs, varkw, defaults)
 
 FullArgSpec = namedtuple('FullArgSpec',
-    'args, varargs, varkw, defaults, posonlyargs, kwonlyargs, kwonlydefaults, annotations')
+    'args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, annotations')
 
 def getfullargspec(func):
     """Get the names and default values of a callable object's parameters.
@@ -1108,7 +1103,6 @@ def getfullargspec(func):
       - the "self" parameter is always reported, even for bound methods
       - wrapper chains defined by __wrapped__ *not* unwrapped automatically
     """
-
     try:
         # Re: `skip_bound_arg=False`
         #
@@ -1182,8 +1176,8 @@ def getfullargspec(func):
         # compatibility with 'func.__defaults__'
         defaults = None
 
-    return FullArgSpec(args, varargs, varkw, defaults,
-                       posonlyargs, kwonlyargs, kwdefaults, annotations)
+    return FullArgSpec(posonlyargs + args, varargs, varkw, defaults,
+                       kwonlyargs, kwdefaults, annotations)
 
 
 ArgInfo = namedtuple('ArgInfo', 'args varargs keywords locals')
@@ -1214,8 +1208,7 @@ def formatannotationrelativeto(object):
     return _formatannotation
 
 def formatargspec(args, varargs=None, varkw=None, defaults=None,
-                  posonlyargs=(), kwonlyargs=(), kwonlydefaults={},
-                  annotations={},
+                  kwonlyargs=(), kwonlydefaults={}, annotations={},
                   formatarg=str,
                   formatvarargs=lambda name: '*' + name,
                   formatvarkw=lambda name: '**' + name,
@@ -1248,17 +1241,12 @@ def formatargspec(args, varargs=None, varkw=None, defaults=None,
         return result
     specs = []
     if defaults:
-        firstdefault = len(posonlyargs) + len(args) - len(defaults)
-    posonly_left = len(posonlyargs)
-    for i, arg in enumerate([*posonlyargs, *args]):
+        firstdefault = len(args) - len(defaults)
+    for i, arg in enumerate(args):
         spec = formatargandannotation(arg)
         if defaults and i >= firstdefault:
             spec = spec + formatvalue(defaults[i - firstdefault])
         specs.append(spec)
-        posonly_left -= 1
-        if posonlyargs and posonly_left == 0:
-            specs.append('/')
-
     if varargs is not None:
         specs.append(formatvarargs(formatargandannotation(varargs)))
     else:
@@ -1337,17 +1325,14 @@ def _too_many(f_name, args, kwonly, varargs, defcount, given, values):
             (f_name, sig, "s" if plural else "", given, kwonly_sig,
              "was" if given == 1 and not kwonly_given else "were"))
 
-def getcallargs(*func_and_positional, **named):
+def getcallargs(func, /, *positional, **named):
     """Get the mapping of arguments to values.
 
     A dict is returned, with keys the function argument names (including the
     names of the * and ** arguments, if any), and values the respective bound
     values from 'positional' and 'named'."""
-    func = func_and_positional[0]
-    positional = func_and_positional[1:]
     spec = getfullargspec(func)
-    (args, varargs, varkw, defaults, posonlyargs,
-     kwonlyargs, kwonlydefaults, ann) = spec
+    args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, ann = spec
     f_name = func.__name__
     arg2value = {}
 
@@ -1356,16 +1341,12 @@ def getcallargs(*func_and_positional, **named):
         # implicit 'self' (or 'cls' for classmethods) argument
         positional = (func.__self__,) + positional
     num_pos = len(positional)
-    num_posonlyargs = len(posonlyargs)
     num_args = len(args)
     num_defaults = len(defaults) if defaults else 0
 
-    n = min(num_pos, num_posonlyargs)
-    for i in range(num_posonlyargs):
-        arg2value[posonlyargs[i]] = positional[i]
     n = min(num_pos, num_args)
     for i in range(n):
-        arg2value[args[i]] = positional[num_posonlyargs+i]
+        arg2value[args[i]] = positional[i]
     if varargs:
         arg2value[varargs] = tuple(positional[n:])
     possible_kwargs = set(args + kwonlyargs)
@@ -1577,7 +1558,7 @@ def _shadowed_dict(klass):
         except KeyError:
             pass
         else:
-            if not (isinstance(class_dict, types.GetSetDescriptorType) and
+            if not (type(class_dict) is types.GetSetDescriptorType and
                     class_dict.__name__ == "__dict__" and
                     class_dict.__objclass__ is entry):
                 return class_dict
@@ -1599,7 +1580,7 @@ def getattr_static(obj, attr, default=_sentinel):
         klass = type(obj)
         dict_attr = _shadowed_dict(klass)
         if (dict_attr is _sentinel or
-            isinstance(dict_attr, types.MemberDescriptorType)):
+            type(dict_attr) is types.MemberDescriptorType):
             instance_result = _check_instance(obj, attr)
     else:
         klass = obj
@@ -2128,7 +2109,7 @@ def _signature_from_builtin(cls, func, skip_bound_arg=True):
     return _signature_fromstr(cls, func, s, skip_bound_arg)
 
 
-def _signature_from_function(cls, func):
+def _signature_from_function(cls, func, skip_bound_arg=True):
     """Private helper: constructs Signature for the given python function."""
 
     is_duck_function = False
@@ -2140,6 +2121,10 @@ def _signature_from_function(cls, func):
             # of pure function:
             raise TypeError('{!r} is not a Python function'.format(func))
 
+    s = getattr(func, "__text_signature__", None)
+    if s:
+        return _signature_fromstr(cls, func, s, skip_bound_arg)
+
     Parameter = cls._parameter_cls
 
     # Parameter information.
@@ -2147,11 +2132,9 @@ def _signature_from_function(cls, func):
     pos_count = func_code.co_argcount
     arg_names = func_code.co_varnames
     posonly_count = func_code.co_posonlyargcount
-    positional_count = posonly_count + pos_count
-    positional_only = tuple(arg_names[:posonly_count])
-    positional = tuple(arg_names[posonly_count:positional_count])
+    positional = arg_names[:pos_count]
     keyword_only_count = func_code.co_kwonlyargcount
-    keyword_only = arg_names[positional_count:(positional_count + keyword_only_count)]
+    keyword_only = arg_names[pos_count:pos_count + keyword_only_count]
     annotations = func.__annotations__
     defaults = func.__defaults__
     kwdefaults = func.__kwdefaults__
@@ -2163,13 +2146,11 @@ def _signature_from_function(cls, func):
 
     parameters = []
 
-    non_default_count = positional_count - pos_default_count
-    all_positional = positional_only + positional
-
+    non_default_count = pos_count - pos_default_count
     posonly_left = posonly_count
 
     # Non-keyword-only parameters w/o defaults.
-    for name in all_positional[:non_default_count]:
+    for name in positional[:non_default_count]:
         kind = _POSITIONAL_ONLY if posonly_left else _POSITIONAL_OR_KEYWORD
         annotation = annotations.get(name, _empty)
         parameters.append(Parameter(name, annotation=annotation,
@@ -2178,7 +2159,7 @@ def _signature_from_function(cls, func):
             posonly_left -= 1
 
     # ... w/ defaults.
-    for offset, name in enumerate(all_positional[non_default_count:]):
+    for offset, name in enumerate(positional[non_default_count:]):
         kind = _POSITIONAL_ONLY if posonly_left else _POSITIONAL_OR_KEYWORD
         annotation = annotations.get(name, _empty)
         parameters.append(Parameter(name, annotation=annotation,
@@ -2189,7 +2170,7 @@ def _signature_from_function(cls, func):
 
     # *args
     if func_code.co_flags & CO_VARARGS:
-        name = arg_names[positional_count + keyword_only_count]
+        name = arg_names[pos_count + keyword_only_count]
         annotation = annotations.get(name, _empty)
         parameters.append(Parameter(name, annotation=annotation,
                                     kind=_VAR_POSITIONAL))
@@ -2206,7 +2187,7 @@ def _signature_from_function(cls, func):
                                     default=default))
     # **kwargs
     if func_code.co_flags & CO_VARKEYWORDS:
-        index = positional_count + keyword_only_count
+        index = pos_count + keyword_only_count
         if func_code.co_flags & CO_VARARGS:
             index += 1
 
@@ -2308,7 +2289,8 @@ def _signature_from_callable(obj, *,
     if isfunction(obj) or _signature_is_functionlike(obj):
         # If it's a pure Python function, or an object that is duck type
         # of a Python function (Cython functions, for instance), then:
-        return _signature_from_function(sigcls, obj)
+        return _signature_from_function(sigcls, obj,
+                                        skip_bound_arg=skip_bound_arg)
 
     if _signature_is_builtin(obj):
         return _signature_from_builtin(sigcls, obj,
@@ -2385,7 +2367,7 @@ def _signature_from_callable(obj, *,
                 if (obj.__init__ is object.__init__ and
                     obj.__new__ is object.__new__):
                     # Return a signature of 'object' builtin.
-                    return signature(object)
+                    return sigcls.from_callable(object)
                 else:
                     raise ValueError(
                         'no signature found for builtin type {!r}'.format(obj))
@@ -3035,19 +3017,19 @@ class Signature:
 
         return self._bound_arguments_cls(self, arguments)
 
-    def bind(*args, **kwargs):
+    def bind(self, /, *args, **kwargs):
         """Get a BoundArguments object, that maps the passed `args`
         and `kwargs` to the function's signature.  Raises `TypeError`
         if the passed arguments can not be bound.
         """
-        return args[0]._bind(args[1:], kwargs)
+        return self._bind(args, kwargs)
 
-    def bind_partial(*args, **kwargs):
+    def bind_partial(self, /, *args, **kwargs):
         """Get a BoundArguments object, that partially maps the
         passed `args` and `kwargs` to the function's signature.
         Raises `TypeError` if the passed arguments can not be bound.
         """
-        return args[0]._bind(args[1:], kwargs, partial=True)
+        return self._bind(args, kwargs, partial=True)
 
     def __reduce__(self):
         return (type(self),
@@ -3136,7 +3118,7 @@ def _main():
                                                     type(exc).__name__,
                                                     exc)
         print(msg, file=sys.stderr)
-        exit(2)
+        sys.exit(2)
 
     if has_attrs:
         parts = attrs.split(".")
@@ -3146,7 +3128,7 @@ def _main():
 
     if module.__name__ in sys.builtin_module_names:
         print("Can't get info for builtin modules.", file=sys.stderr)
-        exit(1)
+        sys.exit(1)
 
     if args.details:
         print('Target: {}'.format(target))

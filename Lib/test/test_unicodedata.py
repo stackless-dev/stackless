@@ -80,7 +80,7 @@ class UnicodeFunctionsTest(UnicodeDatabaseTest):
 
     # Update this if the database changes. Make sure to do a full rebuild
     # (e.g. 'make distclean && make') to get the correct checksum.
-    expectedchecksum = '4cb02a243aed7c251067386dd738189146fddf94'
+    expectedchecksum = 'c44a49ca7c5cb6441640fe174ede604b45028652'
     def test_function_checksum(self):
         data = []
         h = hashlib.sha1()
@@ -220,6 +220,8 @@ class UnicodeFunctionsTest(UnicodeDatabaseTest):
         self.assertEqual(self.db.normalize('NFC', u11a7_str_a), u11a7_str_b)
         self.assertEqual(self.db.normalize('NFC', u11c3_str_a), u11c3_str_b)
 
+    # For tests of unicodedata.is_normalized / self.db.is_normalized ,
+    # see test_normalization.py .
 
     def test_east_asian_width(self):
         eaw = self.db.east_asian_width

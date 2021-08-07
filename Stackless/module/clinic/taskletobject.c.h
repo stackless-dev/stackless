@@ -37,7 +37,7 @@ _stackless_tasklet_set_context(PyTaskletObject *self, PyObject *const *args, Py_
         goto exit;
     }
     if (!PyObject_TypeCheck(args[0], &PyContext_Type)) {
-        _PyArg_BadArgument("set_context", 1, (&PyContext_Type)->tp_name, args[0]);
+        _PyArg_BadArgument("set_context", "argument 'context'", (&PyContext_Type)->tp_name, args[0]);
         goto exit;
     }
     context = args[0];
@@ -52,4 +52,4 @@ exit:
 #ifndef _STACKLESS_TASKLET_SET_CONTEXT_METHODDEF
     #define _STACKLESS_TASKLET_SET_CONTEXT_METHODDEF
 #endif /* !defined(_STACKLESS_TASKLET_SET_CONTEXT_METHODDEF) */
-/*[clinic end generated code: output=f61ea97534fa8b7d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2d90c79e314436e9 input=a9049054013a1b77]*/
