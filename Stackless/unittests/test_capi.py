@@ -380,6 +380,7 @@ class Test_pep523_frame_hook(StacklessTestCase):
     def setUp(self):
         super().setUp()
         self.is_done = False
+
     def tearDown(self):
         super().tearDown()
         _teststackless.test_install_PEP523_eval_frame_hook(reset=True)
@@ -390,6 +391,11 @@ class Test_pep523_frame_hook(StacklessTestCase):
         if fail:
             4711 / 0
         return id(self)
+
+    def filter_audit_frames(self, l):
+        # the test runner installs an audit callback. We have no control
+        # over this callback, but we can observe its frames.
+        return list(i for i in l if "audit" not in i[0].f_code.co_name)
 
     def test_hook_delegates_to__PyEval_EvalFrameDefault(self):
         # test, that the hook function delegates to _PyEval_EvalFrameDefault
@@ -404,6 +410,7 @@ class Test_pep523_frame_hook(StacklessTestCase):
         self.assertIsInstance(self.is_done, types.FrameType)
         self.assertEqual(r2, id(self))
         self.assertEqual(r3, r2)
+        args = self.filter_audit_frames(args)
         self.assertListEqual(args, [(self.is_done, 0)])
 
     def test_hook_delegates_to__PyEval_EvalFrameDefault_exc(self):
@@ -423,6 +430,7 @@ class Test_pep523_frame_hook(StacklessTestCase):
         self.assertIs(r1, ...)
         self.assertIsInstance(self.is_done, types.FrameType)
         self.assertEqual(r2, NotImplemented)
+        args = self.filter_audit_frames(args)
         self.assertListEqual(args, [(self.is_done, 0)])
 
     def test_hook_raises_exception(self):
