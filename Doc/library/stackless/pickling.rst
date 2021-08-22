@@ -147,6 +147,13 @@ types:
 C-types PyAsyncGenASend and PyAsyncGenAThrow (see :pep:`525`) as well as
 all kinds of :ref:`Dictionary view objects <dict-views>`.
 
+Reduction functions raise appropriate auditing hooks.
+
+.. audit-event:: sys._getframe ""
+
+   Reducing objects of type :data:`~types.AsyncGeneratorType`, :data:`~types.CoroutineType` or
+   :data:`~types.GeneratorType` raises an auditing event ``sys._getframe`` with no arguments.
+
 Code
 ====
 
@@ -176,6 +183,16 @@ to execute it raises
 .. versionchanged:: 3.8
    If a program tries to unpickle a frame using a code object whose first bytecode instruction is invalid, then |SLP|
    marks the frame as invalid. Any attempt to execute the frame raises :exc:`RuntimeError`.
+
+.. audit-event:: stackless.frame.__setstate__ ""
+
+   |SLP| raises a auditing event ``stackless.frame.__setstate__`` with no arguments
+   on unpickling frames that could be evaluated.
+
+.. audit-event:: sys.settrace ""
+
+   |SLP| raises a auditing event ``sys.settrace`` with no arguments on unpickling frames
+   with a trace function that could be executed.
 
 
 Functions
@@ -222,3 +239,8 @@ If :const:`~stackless.PICKLEFLAGS_PRESERVE_AG_FINALIZER` has been set and if
 ``ag_finalizer`` by value.
 Otherwise, if :const:`~stackless.PICKLEFLAGS_RESET_AG_FINALIZER` has
 been set, |SLP| unpickles ``ag_finalizer`` as uninitialised.
+
+.. audit-event:: stackless.async_generator.set_finalizer ""
+
+   If ``ag_finalizer`` was unpickled by value, this function raises a auditing event
+   ``stackless.async_generator.set_finalizer`` with no arguments.
