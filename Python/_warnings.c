@@ -1,7 +1,7 @@
 #include "Python.h"
 #include "pycore_pystate.h"
 #include "frameobject.h"
-#include "stackless_api.h"
+#include "pycore_stackless.h"
 #include "clinic/_warnings.c.h"
 
 #define MODULE_NAME "_warnings"
@@ -835,9 +835,11 @@ setup_context(Py_ssize_t stack_level, PyObject **filename, int *lineno,
     PyFrameObject *f = NULL;
     PyObject *current = PyStackless_GetCurrent();
     if (current != NULL) {
-        f = (PyFrameObject *)PyTasklet_GetFrame((PyTaskletObject*)current);
+        f = slp_get_frame((PyTaskletObject*)current); /* returns a borrowed reference */
+        while (f != NULL && !PyFrame_Check(f)) {
+            f = f->f_back;
+        }
         Py_DECREF(current);
-        Py_XDECREF(f); /* turn it into a borrowed reference */
     }
     /* fallback to the state frame */
     if (f == NULL)

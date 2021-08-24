@@ -9,6 +9,19 @@ What's New in Stackless 3.X.X?
 
 *Release date: 20XX-XX-XX*
 
+- https://github.com/stackless-dev/stackless/issues/303
+  Stackless now raises more auditing events:
+  - Reducing objects of type AsyncGeneratorType, CoroutineType or
+    GeneratorType, reading the attribute 'tasklet.frame' or calling
+    'PyTasklet_GetFrame()' raises an auditing event "sys._getframe" with no
+    arguments.
+  - Unpickling of a frame that could be evaluated now raises auditing event
+    "stackless.frame.__setstate__" and, if the frame has a trace function,
+    also auditing event "sys.settrace".
+  - If Stackless pickle flag bit 'PICKLEFLAGS_PRESERVE_AG_FINALIZER' is set
+    then unpickling an async_generator with a pickled finalizer raises auditing
+    event "stackless.async_generator.set_finalizer".
+
 
 What's New in Stackless 3.8.0 and 3.8.1?
 ========================================

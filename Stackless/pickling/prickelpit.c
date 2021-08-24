@@ -1212,8 +1212,15 @@ frame_setstate(PyFrameObject *f, PyObject *args)
 
     /* See if this frame is valid to be run. */
     f->f_executing = valid ? f_executing : SLP_FRAME_EXECUTING_INVALID;
-
     Py_TYPE(f) = &PyFrame_Type;
+    if(valid && f_executing) {
+        if (PySys_Audit("stackless.frame.__setstate__", "O", f))
+            goto err_exit;
+        if (f->f_trace && PySys_Audit("sys.settrace", NULL)) {
+            goto err_exit;
+        }
+    }
+
     Py_INCREF(f);
     return (PyObject *) f;
 err_exit:
@@ -1684,6 +1691,8 @@ reduce_to_gen_obj_head(gen_obj_head_ty *goh, PyFrameObject * frame, const _PyErr
     /* Pickle NULL as None. See gen_setstate() for the corresponding
      * unpickling code. */
     if (frame != NULL) {
+        if (PySys_Audit("sys._getframe", NULL))
+            return -1;
         goh->frame = slp_reduce_frame(frame);
         if (goh->frame == NULL)
             return -1;
@@ -2186,6 +2195,10 @@ async_gen_setstate(PyObject *self, PyObject *args)
             Py_CLEAR(async_gen->ag_finalizer);
         }
         else {
+            if(PySys_Audit("stackless.async_generator.set_finalizer", NULL)) {
+                async_gen = NULL;
+                goto error;
+            }
             async_gen->ag_hooks_inited = hooks_inited;
             Py_INCREF(finalizer);
             Py_XSETREF(async_gen->ag_finalizer, finalizer);

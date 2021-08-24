@@ -187,6 +187,8 @@ Tasklets
 
   Returns the current frame that *task* is executing in, or *NULL*
 
+  .. audit-event:: sys._getframe "" c.PyTasklet_GetFrame
+
 .. c:function:: int PyTasklet_IsMain(PyTaskletObject *task)
 
   Returns ``1`` if *task* is the main tasklet, otherwise ``0``.

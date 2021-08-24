@@ -655,7 +655,10 @@ tasklet_reduce(PyTaskletObject * t, PyObject *value)
     f = t->f.frame;
     while (f != NULL) {
         int ret;
-        PyObject * frame_reducer = slp_reduce_frame(f);
+        PyObject * frame_reducer;
+        if (PySys_Audit("sys._getframe", NULL))
+            goto err_exit;
+        frame_reducer = slp_reduce_frame(f);
         if (frame_reducer == NULL)
             goto err_exit;
         ret = PyList_Append(lis, frame_reducer);
@@ -1912,8 +1915,10 @@ tasklet_get_frame(PyTaskletObject *task, void *closure)
 PyObject *
 PyTasklet_GetFrame(PyTaskletObject *task)
 {
-    PyFrameObject *f = (PyFrameObject *) slp_get_frame(task);
+    if (PySys_Audit("sys._getframe", NULL))
+        return NULL;
 
+    PyFrameObject *f = slp_get_frame(task);
     while (f != NULL && !PyFrame_Check(f)) {
         f = f->f_back;
     }
