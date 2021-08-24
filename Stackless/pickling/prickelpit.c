@@ -1212,15 +1212,15 @@ frame_setstate(PyFrameObject *f, PyObject *args)
 
     /* See if this frame is valid to be run. */
     f->f_executing = valid ? f_executing : SLP_FRAME_EXECUTING_INVALID;
+    Py_TYPE(f) = &PyFrame_Type;
     if(valid && f_executing) {
-        if (PySys_Audit("stackless.frame.__setstate__", NULL))
+        if (PySys_Audit("stackless.frame.__setstate__", "O", f))
             goto err_exit;
         if (f->f_trace && PySys_Audit("sys.settrace", NULL)) {
             goto err_exit;
         }
     }
 
-    Py_TYPE(f) = &PyFrame_Type;
     Py_INCREF(f);
     return (PyObject *) f;
 err_exit:

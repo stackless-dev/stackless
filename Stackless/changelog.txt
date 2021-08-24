@@ -16,8 +16,8 @@ What's New in Stackless 3.X.X?
     'PyTasklet_GetFrame()' raises an auditing event "sys._getframe" with no
     arguments.
   - Unpickling of a frame that could be evaluated now raises auditing event
-    "stackless.frame.__setstate__" with no arguments and, if the frame has a
-    trace function, also auditing event "sys.settrace".
+    "stackless.frame.__setstate__" and, if the frame has a trace function,
+    also auditing event "sys.settrace".
   - If Stackless pickle flag bit 'PICKLEFLAGS_PRESERVE_AG_FINALIZER' is set
     then unpickling an async_generator with a pickled finalizer raises auditing
     event "stackless.async_generator.set_finalizer".

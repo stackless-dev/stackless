@@ -184,15 +184,15 @@ to execute it raises
    If a program tries to unpickle a frame using a code object whose first bytecode instruction is invalid, then |SLP|
    marks the frame as invalid. Any attempt to execute the frame raises :exc:`RuntimeError`.
 
-.. audit-event:: stackless.frame.__setstate__ ""
+.. audit-event:: stackless.frame.__setstate__ frame
 
-   |SLP| raises a auditing event ``stackless.frame.__setstate__`` with no arguments
-   on unpickling frames that could be evaluated.
+   On unpickling frames |SLP| raises an auditing event ``stackless.frame.__setstate__`` with the fully initialized
+   frame object as the argument, if the frame could be evaluated.
 
 .. audit-event:: sys.settrace ""
 
-   |SLP| raises a auditing event ``sys.settrace`` with no arguments on unpickling frames
-   with a trace function that could be executed.
+   On unpickling frames |SLP| raises an auditing event ``sys.settrace`` with no arguments
+   if the frame has a trace function that could be executed.
 
 
 Functions
