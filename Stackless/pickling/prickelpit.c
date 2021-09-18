@@ -957,7 +957,7 @@ static int init_functype(PyObject * mod)
 
  ******************************************************/
 
-#define frametuplefmt "O)(OibOiOOiiOO"
+#define frametuplefmt "O)(OiBOiOOiiOO"
 
 SLP_DEF_INVALID_EXEC(slp_channel_seq_callback)
 SLP_DEF_INVALID_EXEC(slp_tp_init_callback)
@@ -1049,7 +1049,7 @@ err_exit:
 }
 
 #define frametuplenewfmt "O!:frame.__new__"
-#define frametuplesetstatefmt "O!ibO!iO!OiiO!O:frame.__setstate__"
+#define frametuplesetstatefmt "O!iBO!iO!OiiO!O:frame.__setstate__"
 
 static PyObject *
 frame_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
